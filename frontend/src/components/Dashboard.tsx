@@ -3,7 +3,7 @@
  * 계좌 정보, 전략 목록, 매매 내역을 통합하여 표시합니다.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   VStack,
@@ -16,6 +16,8 @@ import { useRealTimeData } from '../hooks/useRealTimeData';
 import { AccountInfo } from './AccountInfo';
 import { StrategyList } from './StrategyList';
 import { TradeHistory } from './TradeHistory';
+import StrategyBuilder from './StrategyBuilder';
+import { Strategy } from '../types/Strategy';
 
 /**
  * 대시보드 컴포넌트
@@ -31,6 +33,10 @@ export const Dashboard: React.FC = () => {
     refreshData
   } = useRealTimeData();
 
+  // 전략 빌더 상태 관리
+  const [showStrategyBuilder, setShowStrategyBuilder] = useState(false);
+  const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
+
   /**
    * 데이터 새로고침 처리
    */
@@ -38,6 +44,41 @@ export const Dashboard: React.FC = () => {
     refreshData();
     // useToast 대신 간단한 알림으로 대체
     console.log('데이터 새로고침 중...');
+  };
+
+  /**
+   * 새 전략 생성 시작
+   */
+  const handleCreateStrategy = () => {
+    setEditingStrategy(null);
+    setShowStrategyBuilder(true);
+  };
+
+  /**
+   * 전략 편집 시작
+   */
+  const handleEditStrategy = (strategy: Strategy) => {
+    setEditingStrategy(strategy);
+    setShowStrategyBuilder(true);
+  };
+
+  /**
+   * 전략 저장 완료
+   */
+  const handleStrategySaved = (strategy: Strategy) => {
+    console.log('전략 저장 완료:', strategy.name);
+    setShowStrategyBuilder(false);
+    setEditingStrategy(null);
+    // 실제로는 전략 목록을 새로고침해야 함
+    refreshData();
+  };
+
+  /**
+   * 전략 빌더 취소
+   */
+  const handleStrategyBuilderCancel = () => {
+    setShowStrategyBuilder(false);
+    setEditingStrategy(null);
   };
 
   /**
@@ -58,6 +99,19 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  // 전략 빌더 화면 표시
+  if (showStrategyBuilder) {
+    return (
+      <Box minH="100vh" bg="gray.50">
+        <StrategyBuilder
+          strategy={editingStrategy}
+          onSave={handleStrategySaved}
+          onCancel={handleStrategyBuilderCancel}
+        />
+      </Box>
+    );
+  }
+
   return (
     <Box minH="100vh" bg="gray.50">
       {/* 대시보드 헤더 */}
@@ -74,16 +128,25 @@ export const Dashboard: React.FC = () => {
             )}
           </Box>
           
-          <Button
-            size="sm"
-            colorScheme="blue"
-            variant="outline"
-            onClick={handleRefresh}
-            loading={isLoading}
-            loadingText="새로고침 중..."
-          >
-            🔄 새로고침
-          </Button>
+          <Flex gap={3}>
+            <Button
+              size="sm"
+              colorScheme="green"
+              onClick={handleCreateStrategy}
+            >
+              📈 새 전략 생성
+            </Button>
+            <Button
+              size="sm"
+              colorScheme="blue"
+              variant="outline"
+              onClick={handleRefresh}
+              loading={isLoading}
+              loadingText="새로고침 중..."
+            >
+              🔄 새로고침
+            </Button>
+          </Flex>
         </Flex>
       </Box>
 
@@ -109,6 +172,7 @@ export const Dashboard: React.FC = () => {
               isLoading={isLoading}
               error={error}
               lastUpdated={lastUpdated}
+              onEditStrategy={handleEditStrategy}
             />
 
             {/* 매매 내역 */}
@@ -120,38 +184,52 @@ export const Dashboard: React.FC = () => {
             />
           </Grid>
 
-          {/* 추가 기능 안내 */}
+          {/* 전략 생성 안내 */}
           <Box
             p={6}
             bg="gradient-to-r"
-            bgGradient="linear(to-r, blue.50, purple.50)"
+            bgGradient="linear(to-r, green.50, blue.50)"
             borderRadius="lg"
             border="1px"
-            borderColor="blue.200"
+            borderColor="green.200"
           >
-            <Text fontSize="lg" fontWeight="bold" mb={3} color="blue.800">
-              🚀 다음 단계
+            <Text fontSize="lg" fontWeight="bold" mb={3} color="green.800">
+              🎯 전략 생성 시스템
             </Text>
             <VStack align="start" gap={2}>
-              <Text fontSize="sm" color="blue.700">
-                • 전략 생성 도구로 나만의 퀀트 전략을 만들어보세요
+              <Text fontSize="sm" color="green.700">
+                • 드래그앤드롭으로 직관적인 전략 생성
               </Text>
-              <Text fontSize="sm" color="blue.700">
-                • 백테스팅으로 전략의 성과를 검증해보세요
+              <Text fontSize="sm" color="green.700">
+                • 8가지 기술 지표 지원 (SMA, EMA, RSI, MACD, 볼린저밴드 등)
               </Text>
-              <Text fontSize="sm" color="blue.700">
-                • 검증된 전략으로 자동매매를 시작해보세요
+              <Text fontSize="sm" color="green.700">
+                • 복잡한 매수/매도 조건 설정 가능
+              </Text>
+              <Text fontSize="sm" color="green.700">
+                • 리스크 관리 및 손절/익절 설정
+              </Text>
+              <Text fontSize="sm" color="green.700">
+                • 골든 크로스 등 기본 템플릿 제공
               </Text>
             </VStack>
-            <Button
-              mt={4}
-              size="sm"
-              colorScheme="blue"
-              variant="solid"
-              disabled
-            >
-              곧 출시 예정
-            </Button>
+            <Flex gap={3} mt={4}>
+              <Button
+                size="sm"
+                colorScheme="green"
+                onClick={handleCreateStrategy}
+              >
+                지금 전략 만들기
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="blue"
+                disabled
+              >
+                백테스팅 (준비 중)
+              </Button>
+            </Flex>
           </Box>
 
           {/* 시스템 상태 */}

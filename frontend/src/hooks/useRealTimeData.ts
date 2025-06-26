@@ -5,6 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { firebaseService } from '../services/FirebaseService';
+import StrategyService from '../services/StrategyService';
+import { Strategy as FullStrategy } from '../types/Strategy';
 
 // 계좌 정보 인터페이스
 export interface AccountInfo {
@@ -15,7 +17,7 @@ export interface AccountInfo {
   lastUpdated: number;
 }
 
-// 전략 정보 인터페이스
+// 전략 정보 인터페이스 (실행 상태 중심)
 export interface Strategy {
   id: string;
   name: string;
@@ -49,6 +51,26 @@ export interface RealTimeData {
 }
 
 /**
+ * FullStrategy를 간단한 Strategy로 변환
+ */
+const convertToRuntimeStrategy = (fullStrategy: FullStrategy): Strategy => {
+  // 기본적으로 모의 수익률과 수익금액을 생성
+  // 실제로는 백테스팅 결과나 실시간 거래 데이터에서 가져와야 함
+  const mockProfitRate = (Math.random() - 0.5) * 20; // -10% ~ +10%
+  const mockProfitAmount = mockProfitRate * 10000; // 가상의 투자금 기준
+
+  return {
+    id: fullStrategy.id,
+    name: fullStrategy.name,
+    status: fullStrategy.isActive ? 'active' : 'stopped',
+    profitRate: mockProfitRate,
+    profitAmount: mockProfitAmount,
+    startDate: fullStrategy.createdAt,
+    lastUpdated: fullStrategy.updatedAt
+  };
+};
+
+/**
  * 실시간 데이터 구독 훅
  */
 export const useRealTimeData = () => {
@@ -76,9 +98,6 @@ export const useRealTimeData = () => {
           return;
         }
 
-        // Firebase Realtime Database 참조 (실제로는 localStorage에서 데이터 조회)
-        // 현재는 localStorage 기반 시스템이므로 모의 데이터로 대체
-        
         // 모의 계좌 정보
         const mockAccountInfo: AccountInfo = {
           totalAssets: 10000000,
@@ -88,27 +107,10 @@ export const useRealTimeData = () => {
           lastUpdated: Date.now()
         };
 
-        // 모의 전략 데이터
-        const mockStrategies: Strategy[] = [
-          {
-            id: 'strategy-1',
-            name: '모멘텀 전략',
-            status: 'active',
-            profitRate: 8.5,
-            profitAmount: 425000,
-            startDate: Date.now() - 30 * 24 * 60 * 60 * 1000,
-            lastUpdated: Date.now()
-          },
-          {
-            id: 'strategy-2',
-            name: '평균회귀 전략',
-            status: 'paused',
-            profitRate: 2.1,
-            profitAmount: 105000,
-            startDate: Date.now() - 15 * 24 * 60 * 60 * 1000,
-            lastUpdated: Date.now()
-          }
-        ];
+        // 실제 전략 데이터 로드
+        const strategyService = StrategyService.getInstance();
+        const fullStrategies = await strategyService.getStrategies();
+        const runtimeStrategies = fullStrategies.map(convertToRuntimeStrategy);
 
         // 모의 매매 내역
         const mockTrades: TradeRecord[] = [
@@ -120,7 +122,7 @@ export const useRealTimeData = () => {
             price: 75000,
             amount: 750000,
             timestamp: Date.now() - 60 * 60 * 1000,
-            strategyId: 'strategy-1'
+            strategyId: runtimeStrategies[0]?.id
           },
           {
             id: 'trade-2',
@@ -130,21 +132,25 @@ export const useRealTimeData = () => {
             price: 120000,
             amount: 600000,
             timestamp: Date.now() - 2 * 60 * 60 * 1000,
-            strategyId: 'strategy-1'
+            strategyId: runtimeStrategies[0]?.id
           }
         ];
 
         setData({
           accountInfo: mockAccountInfo,
-          strategies: mockStrategies,
+          strategies: runtimeStrategies,
           recentTrades: mockTrades,
           isLoading: false,
           error: null,
           lastUpdated: Date.now()
         });
 
-        // 실시간 업데이트 시뮬레이션 (1초마다)
-        const updateInterval = setInterval(() => {
+        // 실시간 업데이트 시뮬레이션 (5초마다)
+        const updateInterval = setInterval(async () => {
+          // 전략 데이터 다시 로드 (새로 생성된 전략 반영)
+          const updatedFullStrategies = await strategyService.getStrategies();
+          const updatedRuntimeStrategies = updatedFullStrategies.map(convertToRuntimeStrategy);
+
           setData(prev => ({
             ...prev,
             accountInfo: prev.accountInfo ? {
@@ -153,9 +159,10 @@ export const useRealTimeData = () => {
               profitAmount: prev.accountInfo.profitAmount + (Math.random() - 0.5) * 1000,
               lastUpdated: Date.now()
             } : null,
+            strategies: updatedRuntimeStrategies,
             lastUpdated: Date.now()
           }));
-        }, 1000);
+        }, 5000);
 
         unsubscribeFunctions.push(() => clearInterval(updateInterval));
 
@@ -178,16 +185,31 @@ export const useRealTimeData = () => {
   }, []);
 
   // 데이터 새로고침 함수
-  const refreshData = () => {
+  const refreshData = async () => {
     setData(prev => ({ ...prev, isLoading: true, error: null }));
-    // 실제로는 Firebase에서 데이터를 다시 가져오는 로직이 들어갑니다.
-    setTimeout(() => {
+    
+    try {
+      // 실제 전략 데이터 다시 로드
+      const strategyService = StrategyService.getInstance();
+      const fullStrategies = await strategyService.getStrategies();
+      const runtimeStrategies = fullStrategies.map(convertToRuntimeStrategy);
+      
+      setTimeout(() => {
+        setData(prev => ({
+          ...prev,
+          strategies: runtimeStrategies,
+          isLoading: false,
+          lastUpdated: Date.now()
+        }));
+      }, 500);
+    } catch (error) {
+      console.error('데이터 새로고침 오류:', error);
       setData(prev => ({
         ...prev,
         isLoading: false,
-        lastUpdated: Date.now()
+        error: '데이터 새로고침 중 오류가 발생했습니다.'
       }));
-    }, 1000);
+    }
   };
 
   return {

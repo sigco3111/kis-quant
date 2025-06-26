@@ -9,15 +9,18 @@ import {
   Text,
   Badge,
   Spinner,
-  Flex
+  Flex,
+  Button
 } from '@chakra-ui/react';
-import { Strategy } from '../hooks/useRealTimeData';
+import { Strategy as RealTimeStrategy } from '../hooks/useRealTimeData';
+import { Strategy } from '../types/Strategy';
 
 interface StrategyListProps {
-  strategies: Strategy[];
+  strategies: RealTimeStrategy[];
   isLoading: boolean;
   error: string | null;
   lastUpdated: number;
+  onEditStrategy?: (strategy: Strategy) => void;
 }
 
 /**
@@ -59,7 +62,7 @@ const formatRelativeTime = (timestamp: number): string => {
 /**
  * 전략 상태에 따른 배지 스타일 반환
  */
-const getStatusBadge = (status: Strategy['status']) => {
+const getStatusBadge = (status: RealTimeStrategy['status']) => {
   switch (status) {
     case 'active':
       return { colorScheme: 'green', text: '실행중' };
@@ -73,14 +76,50 @@ const getStatusBadge = (status: Strategy['status']) => {
 };
 
 /**
+ * RealTimeStrategy를 Strategy로 변환 (편집용)
+ */
+const convertToFullStrategy = (rtStrategy: RealTimeStrategy): Strategy => {
+  // 기본 전략 구조로 변환 (실제로는 StrategyService에서 조회해야 함)
+  return {
+    id: rtStrategy.id,
+    name: rtStrategy.name,
+    description: '실시간 데이터에서 변환된 전략',
+    symbols: [],
+    buyConditions: [],
+    sellConditions: [],
+    riskManagement: {
+      stopLoss: 5,
+      takeProfit: 10,
+      maxPosition: 100,
+      maxDailyTrades: 10
+    },
+    isActive: rtStrategy.status === 'active',
+    createdAt: rtStrategy.startDate,
+    updatedAt: rtStrategy.lastUpdated,
+    version: 1
+  };
+};
+
+/**
  * 전략 목록 컴포넌트
  */
 export const StrategyList: React.FC<StrategyListProps> = ({
   strategies,
   isLoading,
   error,
-  lastUpdated
+  lastUpdated,
+  onEditStrategy
 }) => {
+  /**
+   * 전략 편집 처리
+   */
+  const handleEditStrategy = (rtStrategy: RealTimeStrategy) => {
+    if (onEditStrategy) {
+      const fullStrategy = convertToFullStrategy(rtStrategy);
+      onEditStrategy(fullStrategy);
+    }
+  };
+
   // 로딩 상태
   if (isLoading) {
     return (
@@ -160,9 +199,21 @@ export const StrategyList: React.FC<StrategyListProps> = ({
                         시작일: {formatRelativeTime(strategy.startDate)}
                       </Text>
                     </Box>
-                    <Badge colorScheme={statusBadge.colorScheme} variant="subtle">
-                      {statusBadge.text}
-                    </Badge>
+                    <Flex gap={2} align="center">
+                      <Badge colorScheme={statusBadge.colorScheme} variant="subtle">
+                        {statusBadge.text}
+                      </Badge>
+                      {onEditStrategy && (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          colorScheme="blue"
+                          onClick={() => handleEditStrategy(strategy)}
+                        >
+                          편집
+                        </Button>
+                      )}
+                    </Flex>
                   </Flex>
                   
                   <Flex justify="space-between" align="center">
