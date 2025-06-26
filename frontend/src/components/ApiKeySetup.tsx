@@ -11,11 +11,15 @@ import {
 } from '@chakra-ui/react';
 import { apiKeyService, ApiKeyData } from '../services/ApiKeyService';
 
+interface ApiKeySetupProps {
+  onSetupComplete?: () => void;
+}
+
 /**
  * API 키 설정 컴포넌트
  * 한국투자증권 API 키를 안전하게 입력, 저장, 관리하는 컴포넌트
  */
-export const ApiKeySetup: React.FC = () => {
+export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onSetupComplete }) => {
   // 폼 상태
   const [formData, setFormData] = useState({
     appKey: '',
@@ -140,6 +144,10 @@ export const ApiKeySetup: React.FC = () => {
 
       // 저장된 키 상태 업데이트
       checkStoredKeys();
+
+      if (onSetupComplete) {
+        onSetupComplete();
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '저장에 실패했습니다.';
