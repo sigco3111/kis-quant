@@ -28,6 +28,7 @@ __pycache__/
 *.so
 .Python
 venv/
+server/venv/
 env/
 ENV/
 env.bak/
