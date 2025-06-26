@@ -83,6 +83,12 @@
 - **별도 백엔드 서버**: 자동매매 실행, 장기 백테스팅
 - **IP 화이트리스트**: 백엔드 서버 IP만 KIS API 접근 허용
 
+### Firebase 설정 자동 저장 (v2.0 신규)
+- **LocalConfigService**: 브라우저 localStorage를 활용한 Firebase 설정 관리
+- **자동 로드 순서**: 환경변수 → localStorage → 사용자 입력
+- **보안 고려사항**: Firebase 설정은 공개 정보이므로 localStorage 저장 안전
+- **사용자 경험**: 한 번 입력하면 다음 접속 시 자동으로 연결
+
 ## Firebase 연동 규칙
 
 ### Firestore 데이터 구조
@@ -111,10 +117,12 @@
   }
   ```
 
-### Firebase 인증 처리
-- **익명 인증 사용**: 회원가입 없이 익명 UID 생성
+### Firebase 인증 처리 (v2.0 업데이트)
+- **Google 인증 사용**: Google 계정 기반 사용자 인증 (권장)
+- **익명 인증 지원**: 기존 호환성을 위해 유지
 - **세션 관리**: Firebase Auth 상태 유지
 - **데이터 연결**: 모든 사용자 데이터는 UID로 구분
+- **사용자별 데이터 격리**: 각 사용자는 자신의 데이터만 접근 가능
 
 ## 데이터 처리 규칙
 
@@ -131,11 +139,17 @@
 
 ## 기능별 구현 규칙
 
-### 초기 설정 페이지
-- **필수 구현**: 사용자 첫 접속 시 설정 페이지 우선 표시
+### 초기 설정 페이지 (v2.0 개선)
+- **2단계 설정 프로세스**:
+  1. **Firebase 연결**: 설정 입력 → 연결 테스트 → 브라우저 자동 저장
+  2. **Google 로그인**: Firebase 연결 완료 후 Google 계정으로 로그인
 - **입력 필드**: Firebase 인증 정보 6개 + KIS API 키 2개
+- **자동 로드**: "환경변수에서 불러오기" 버튼으로 자동 설정
 - **유효성 검증**: 입력된 정보로 실제 연결 테스트
-- **저장 처리**: Firebase 연결 후 API 키를 암호화하여 Firebase DB에 저장
+- **저장 처리**: 
+  - Firebase 설정 → localStorage에 자동 저장
+  - API 키 → 암호화하여 Firebase DB에 저장
+- **재접속 편의성**: 저장된 설정으로 원클릭 재연결
 
 ### 대시보드 구현
 - **데이터 소스**: 사용자 Firebase DB에서 직접 조회
@@ -171,7 +185,9 @@
 - **프레임워크**: React (추천) 또는 Vue.js
 - **UI 라이브러리**: Chakra UI, Ant Design, Vuetify
 - **상태 관리**: Zustand (React) 또는 Pinia (Vue.js)
-- **암호화**: crypto-js 라이브러리
+- **암호화**: crypto-js 라이브러리 (AES-256-CBC)
+- **로컬 저장소**: localStorage (Firebase 설정 자동 저장)
+- **인증**: Firebase Google Auth + 익명 인증 지원
 
 ### 백엔드
 - **Vercel Serverless**: Python 또는 Node.js
@@ -195,6 +211,48 @@
 - **로그 레벨**: ERROR, WARN, INFO, DEBUG
 - **민감 정보**: API 키, 인증 정보 로그 기록 금지
 - **매매 로그**: 모든 거래 내역은 상세 기록
+
+## 새로운 서비스 구현 규칙 (v2.0)
+
+### LocalConfigService 구현
+- **목적**: Firebase 설정을 브라우저 localStorage에 저장/로드
+- **저장 키**: `firebase-config`
+- **데이터 형식**: JSON 직렬화된 Firebase 설정 객체
+- **보안**: Firebase 설정은 공개 정보이므로 평문 저장 가능
+- **필수 메서드**:
+  ```typescript
+  saveConfig(config: FirebaseConfig): void
+  loadConfig(): FirebaseConfig | null
+  clearConfig(): void
+  hasConfig(): boolean
+  ```
+
+### UserConfigService 구현  
+- **목적**: 사용자별 Firebase 설정을 암호화하여 클라우드 저장
+- **저장 위치**: Firebase Firestore `/users/{uid}/config/firebase`
+- **암호화**: AES-256-CBC 사용 (사용자 비밀번호 기반)
+- **필수 메서드**:
+  ```typescript
+  saveUserConfig(config: FirebaseConfig, password: string): Promise<void>
+  loadUserConfig(password: string): Promise<FirebaseConfig | null>
+  ```
+
+### GoogleAuthService 구현
+- **목적**: Firebase Google 인증 관리
+- **기능**: 로그인, 로그아웃, 인증 상태 모니터링
+- **에러 처리**: Firebase 인증 에러별 한국어 메시지 제공
+- **필수 메서드**:
+  ```typescript
+  signInWithGoogle(): Promise<User>
+  signOut(): Promise<void>
+  getCurrentUser(): User | null
+  onAuthStateChanged(callback: (user: User | null) => void): void
+  ```
+
+### 에러 처리 개선
+- **Firebase 인증 에러**: 사용자 친화적인 한국어 메시지
+- **연결 실패**: 구체적인 해결 방법 안내
+- **권한 에러**: Firebase Console 설정 확인 가이드 제공
 
 ## 보안 강화 규칙
 

@@ -49,8 +49,10 @@ kis-quant/
 - **프레임워크**: React
 - **UI 라이브러리**: Chakra UI
 - **상태 관리**: Zustand
-- **암호화**: crypto-js
+- **암호화**: crypto-js (AES-256-CBC)
 - **데이터베이스**: Firebase Firestore + Realtime Database
+- **로컬 저장소**: localStorage (Firebase 설정 자동 저장)
+- **인증**: Firebase Google Auth
 
 ### 백엔드
 - **미들웨어**: Vercel Serverless Functions
@@ -107,7 +109,9 @@ cd frontend
 cp ../env.example .env
 ```
 
-#### 2.3 환경 변수 설정
+#### 2.3 환경 변수 설정 (선택사항)
+
+환경변수를 설정하면 앱 시작 시 자동으로 Firebase 설정이 로드됩니다:
 
 **frontend/.env** 파일을 편집하여 Firebase 설정 입력:
 ```bash
@@ -120,7 +124,7 @@ REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
 REACT_APP_FIREBASE_APP_ID=your_app_id_here
 ```
 
-> 💡 **팁**: 웹 앱 실행 후 Firebase 설정 화면에서 "환경변수에서 불러오기" 버튼을 클릭하면 자동으로 값이 채워집니다!
+> 💡 **환경변수 없이도 사용 가능!**: 웹 앱에서 직접 Firebase 설정을 입력할 수 있습니다. 한 번 입력하면 브라우저에 저장되어 다음부터 자동으로 로드됩니다.
 
 ### 3. 개발 서버 실행
 
@@ -170,11 +174,25 @@ Firebase Console → **Authentication** → **Sign-in method** → **승인된 �
 
 ## 📚 주요 기능
 
-### 1. 초기 설정
-- Google 계정으로 로그인
-- Firebase 프로젝트 연동 및 설정 자동 저장
-- 한국투자증권 API 키 등록 (암호화 저장)
-- 다음 로그인 시 자동 Firebase 연결
+### 1. 초기 설정 (2단계 간편 설정)
+
+#### 1단계: Firebase 프로젝트 연결
+- Firebase 설정을 한 번만 입력하면 브라우저에 자동 저장
+- 환경변수가 없어도 웹 UI에서 직접 설정 가능
+- "환경변수에서 불러오기" 버튼으로 자동 설정 가능
+- 다음 접속 시 저장된 설정 자동 로드
+
+#### 2단계: Google 로그인 및 API 키 관리
+- Firebase 연결 완료 후 Google 계정으로 로그인
+- 한국투자증권 API 키 등록 (AES-256 암호화 저장)
+- 사용자별 독립적인 데이터 관리
+- 클라우드 동기화로 어디서든 접속 가능
+
+#### 🚀 **간편한 재접속**
+한 번 설정하면:
+1. 앱 접속 → 저장된 Firebase 설정 자동 로드 ✅
+2. Google 로그인 → 암호화된 API 키 자동 복원 ✅
+3. 바로 거래 시작! 🎯
 
 ### 2. 대시보드
 - 계좌 현황 실시간 조회
@@ -198,6 +216,25 @@ Firebase Console → **Authentication** → **Sign-in method** → **승인된 �
 
 ### 6. 실시간 모니터링
 - WebSocket 기반 실시간 업데이트
+
+## 🆕 최신 업데이트 (v2.0)
+
+### 🚀 사용자 경험 대폭 개선
+1. **환경변수 없이도 사용 가능**: 웹 UI에서 직접 Firebase 설정 입력
+2. **자동 설정 저장**: 한 번 입력한 설정은 브라우저에 자동 저장
+3. **2단계 간편 설정**: Firebase 연결 → Google 로그인 순서로 직관적 진행
+4. **원클릭 재연결**: 저장된 설정으로 즉시 Firebase 연결
+
+### 🔧 새로운 기능들
+- **LocalConfigService**: 브라우저 localStorage 기반 설정 관리
+- **자동 로드**: 앱 시작 시 환경변수 → localStorage 순서로 자동 로드
+- **수동 관리**: "저장된 설정 불러오기", "브라우저에 저장" 버튼
+- **에러 처리 개선**: Firebase 인증 에러별 상세한 한국어 안내
+
+### 🛡️ 보안 강화
+- **AES-256-CBC 암호화**: 모든 민감 데이터 암호화 저장
+- **사용자별 데이터 격리**: Google 계정 기반 독립적 데이터 관리
+- **로컬 우선 저장**: 브라우저 localStorage 활용으로 프라이버시 보호
 - 중요 이벤트 알림
 - 상태 동기화
 
