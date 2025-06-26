@@ -62,7 +62,7 @@ export const useRealTimeData = () => {
   });
 
   useEffect(() => {
-    let unsubscribeFunctions: (() => void)[] = [];
+    const unsubscribeFunctions: (() => void)[] = [];
 
     const initializeDataSubscription = async () => {
       try {
