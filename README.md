@@ -133,6 +133,39 @@ source venv/bin/activate
 uvicorn src.main:app --reload --port 8000
 ```
 
+## 🚀 Vercel 배포
+
+### 1. Vercel 프로젝트 생성
+1. [Vercel Dashboard](https://vercel.com/dashboard)에서 **New Project** 클릭
+2. GitHub 저장소 연결
+3. **Framework Preset**: Create React App 선택
+4. **Root Directory**: 기본값 사용 (루트)
+5. **Build and Output Settings**: 자동 감지됨
+
+### 2. 환경변수 설정
+Vercel Dashboard → **Project Settings** → **Environment Variables**에서 다음 변수들 추가:
+
+```bash
+REACT_APP_FIREBASE_API_KEY=your_firebase_api_key_here
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+REACT_APP_FIREBASE_DATABASE_URL=https://your_project_id-default-rtdb.firebaseio.com/
+REACT_APP_FIREBASE_PROJECT_ID=your_project_id_here
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
+REACT_APP_FIREBASE_APP_ID=your_app_id_here
+NODE_ENV=production
+GENERATE_SOURCEMAP=false
+```
+
+### 3. Firebase 도메인 설정
+Firebase Console → **Authentication** → **Sign-in method** → **승인된 도메인**에 Vercel 도메인 추가:
+- `your-project.vercel.app`
+- `kis-quant.vercel.app` (커스텀 도메인 사용 시)
+
+### 4. 배포
+- GitHub에 푸시하면 자동으로 Vercel에서 배포됨
+- 수동 배포: Vercel Dashboard에서 **Deploy** 버튼 클릭
+
 ## 📚 주요 기능
 
 ### 1. 초기 설정
