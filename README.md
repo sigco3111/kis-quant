@@ -87,15 +87,38 @@ pip install -r requirements.txt
 
 ### 2. 환경 변수 설정
 
+#### 2.1 Firebase 프로젝트 생성
+1. [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트 생성
+2. **Authentication** → **Sign-in method** → **익명** 활성화
+3. **Firestore Database** 생성 (테스트 모드)
+4. **Realtime Database** 생성 (테스트 모드)
+5. **프로젝트 설정** → **일반** → **웹 앱 추가**
+
+#### 2.2 환경 변수 파일 생성
+
 ```bash
 # 루트 디렉토리에서
 cp env.example .env
+
+# React 앱용 환경 변수 (frontend 폴더에)
+cd frontend
+cp ../env.example .env
 ```
 
-`.env` 파일을 편집하여 다음 정보를 입력:
-- Firebase 프로젝트 설정 (6개 항목)
-- 한국투자증권 API 키 (4개 항목)
-- 암호화 키 및 기타 설정
+#### 2.3 환경 변수 설정
+
+**frontend/.env** 파일을 편집하여 Firebase 설정 입력:
+```bash
+REACT_APP_FIREBASE_API_KEY=your_firebase_api_key_here
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+REACT_APP_FIREBASE_DATABASE_URL=https://your_project_id-default-rtdb.firebaseio.com/
+REACT_APP_FIREBASE_PROJECT_ID=your_project_id_here
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
+REACT_APP_FIREBASE_APP_ID=your_app_id_here
+```
+
+> 💡 **팁**: 웹 앱 실행 후 Firebase 설정 화면에서 "환경변수에서 불러오기" 버튼을 클릭하면 자동으로 값이 채워집니다!
 
 ### 3. 개발 서버 실행
 

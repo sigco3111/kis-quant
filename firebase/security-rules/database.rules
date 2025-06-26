@@ -128,6 +128,14 @@
       }
     },
     
+    // 연결 테스트용 경로 (익명 사용자도 접근 가능)
+    "test": {
+      "connection": {
+        ".read": "auth != null",
+        ".write": false
+      }
+    },
+    
     // 기본 거부 규칙
     ".read": false,
     ".write": false
