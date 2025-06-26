@@ -84,3 +84,4 @@ temp_data/
 firebase-config.json
 kis-api-config.json
 secrets.json 
+.vercel
