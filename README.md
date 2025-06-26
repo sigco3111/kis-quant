@@ -89,7 +89,9 @@ pip install -r requirements.txt
 
 #### 2.1 Firebase 프로젝트 생성
 1. [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트 생성
-2. **Authentication** → **Sign-in method** → **익명** 활성화
+2. **Authentication** → **Sign-in method**에서 다음을 활성화:
+   - **Google** 인증 (프로젝트 지원 이메일 설정 필요)
+   - **익명** 인증 (기존 호환성을 위해)
 3. **Firestore Database** 생성 (테스트 모드)
 4. **Realtime Database** 생성 (테스트 모드)
 5. **프로젝트 설정** → **일반** → **웹 앱 추가**
@@ -169,9 +171,10 @@ Firebase Console → **Authentication** → **Sign-in method** → **승인된 �
 ## 📚 주요 기능
 
 ### 1. 초기 설정
-- Firebase 프로젝트 연동
+- Google 계정으로 로그인
+- Firebase 프로젝트 연동 및 설정 자동 저장
 - 한국투자증권 API 키 등록 (암호화 저장)
-- 익명 인증을 통한 사용자 식별
+- 다음 로그인 시 자동 Firebase 연결
 
 ### 2. 대시보드
 - 계좌 현황 실시간 조회

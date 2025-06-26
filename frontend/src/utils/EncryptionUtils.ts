@@ -125,4 +125,95 @@ export class EncryptionUtils {
     const apiKeyRegex = /^[A-Za-z0-9+/=_-]{20,}$/;
     return apiKeyRegex.test(apiKey.trim());
   }
+
+  /**
+   * 일반 데이터를 암호화합니다.
+   * @param plainText 암호화할 평문 데이터
+   * @param password 암호화에 사용할 비밀번호
+   * @returns Promise<string> 암호화된 데이터 (base64 인코딩)
+   */
+  public async encrypt(plainText: string, password: string): Promise<string> {
+    try {
+      // 솔트 생성
+      const salt = CryptoJS.lib.WordArray.random(EncryptionUtils.SALT_SIZE);
+      
+      // PBKDF2로 키 파생
+      const key = CryptoJS.PBKDF2(password, salt, {
+        keySize: 256 / 32,
+        iterations: 10000
+      });
+      
+      // IV 생성
+      const iv = CryptoJS.lib.WordArray.random(EncryptionUtils.IV_SIZE);
+      
+      // AES 암호화
+      const encrypted = CryptoJS.AES.encrypt(plainText, key, {
+        iv: iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
+      
+      // 솔트 + IV + 암호화된 데이터를 합쳐서 base64로 인코딩
+      const combined = salt.concat(iv).concat(encrypted.ciphertext);
+      return combined.toString(CryptoJS.enc.Base64);
+    } catch (error) {
+      console.error('데이터 암호화 중 오류가 발생했습니다:', error);
+      throw new Error('암호화 처리에 실패했습니다.');
+    }
+  }
+
+  /**
+   * 암호화된 데이터를 복호화합니다.
+   * @param encryptedData 암호화된 데이터 (base64 인코딩)
+   * @param password 복호화에 사용할 비밀번호
+   * @returns Promise<string> 복호화된 평문 데이터
+   */
+  public async decrypt(encryptedData: string, password: string): Promise<string> {
+    try {
+      // base64 디코딩
+      const combined = CryptoJS.enc.Base64.parse(encryptedData);
+      
+      // 솔트, IV, 암호화된 데이터 분리
+      const saltSize = EncryptionUtils.SALT_SIZE / 4; // WordArray 단위로 변환
+      const ivSize = EncryptionUtils.IV_SIZE / 4;
+      
+      const salt = CryptoJS.lib.WordArray.create(
+        combined.words.slice(0, saltSize)
+      );
+      const iv = CryptoJS.lib.WordArray.create(
+        combined.words.slice(saltSize, saltSize + ivSize)
+      );
+      const encrypted = CryptoJS.lib.WordArray.create(
+        combined.words.slice(saltSize + ivSize)
+      );
+      
+      // 키 파생
+      const key = CryptoJS.PBKDF2(password, salt, {
+        keySize: 256 / 32,
+        iterations: 10000
+      });
+      
+      // AES 복호화
+      const decrypted = CryptoJS.AES.decrypt(
+        { ciphertext: encrypted } as any,
+        key,
+        {
+          iv: iv,
+          mode: CryptoJS.mode.CBC,
+          padding: CryptoJS.pad.Pkcs7
+        }
+      );
+      
+      const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+      
+      if (!decryptedText) {
+        throw new Error('복호화된 데이터가 비어있습니다.');
+      }
+      
+      return decryptedText;
+    } catch (error) {
+      console.error('데이터 복호화 중 오류가 발생했습니다:', error);
+      throw new Error('복호화 처리에 실패했습니다. 비밀번호를 확인해주세요.');
+    }
+  }
 } 

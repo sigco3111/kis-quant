@@ -17,6 +17,9 @@ import {
   Textarea
 } from '@chakra-ui/react';
 import { firebaseService, FirebaseConfig, ConnectionStatus } from '../services/FirebaseService';
+import { googleAuthService, GoogleUser } from '../services/GoogleAuthService';
+import { userConfigService } from '../services/UserConfigService';
+import GoogleLogin from './GoogleLogin';
 
 interface FirebaseSetupProps {
   onConnectionSuccess: (user: any) => void;
@@ -53,6 +56,9 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
   const [showHelp, setShowHelp] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<GoogleUser | null>(null);
+  const [hasStoredConfig, setHasStoredConfig] = useState(false);
+  const [userPassword, setUserPassword] = useState('');
 
   /**
    * 환경변수에서 Firebase 설정값 로드
@@ -109,6 +115,126 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
   useEffect(() => {
     loadFromEnvironment();
   }, []);
+
+  /**
+   * Google 로그인 성공 처리
+   * @param user 로그인한 사용자 정보
+   */
+  const handleLoginSuccess = async (user: GoogleUser) => {
+    setCurrentUser(user);
+    setMessage({ type: 'success', text: `${user.displayName}님, 환영합니다!` });
+
+    // 저장된 설정이 있는지 확인
+    try {
+      const hasConfig = await userConfigService.hasUserFirebaseConfig(user.uid);
+      setHasStoredConfig(hasConfig);
+
+      if (hasConfig) {
+        setMessage({ 
+          type: 'info', 
+          text: '저장된 Firebase 설정이 있습니다. 비밀번호를 입력하여 자동으로 로드할 수 있습니다.' 
+        });
+      }
+    } catch (error) {
+      console.error('저장된 설정 확인 실패:', error);
+    }
+  };
+
+  /**
+   * Google 로그인 에러 처리
+   * @param error 에러 메시지
+   */
+  const handleLoginError = (error: string) => {
+    setMessage({ type: 'error', text: error });
+  };
+
+  /**
+   * 저장된 Firebase 설정 로드
+   */
+  const loadStoredConfig = async () => {
+    if (!currentUser || !userPassword.trim()) {
+      setMessage({ type: 'error', text: '비밀번호를 입력해주세요.' });
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage(null);
+
+    try {
+      const userConfig = await userConfigService.loadUserFirebaseConfig(
+        currentUser.uid,
+        userPassword
+      );
+
+      if (userConfig) {
+        // 폼에 설정값 로드
+        setFormData(userConfig.firebaseConfig);
+        setMessage({ 
+          type: 'success', 
+          text: '저장된 Firebase 설정을 성공적으로 로드했습니다!' 
+        });
+
+        // 저장된 설정으로 Firebase 자동 연결 시도
+        await handleConnectWithConfig(userConfig.firebaseConfig);
+      } else {
+        setMessage({ type: 'error', text: '저장된 설정을 찾을 수 없습니다.' });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '설정 로드에 실패했습니다.';
+      setMessage({ type: 'error', text: errorMessage });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Firebase 설정 저장
+   */
+  const saveFirebaseConfig = async () => {
+    if (!currentUser) {
+      setMessage({ type: 'error', text: '먼저 Google 로그인을 해주세요.' });
+      return;
+    }
+
+    if (!userPassword.trim()) {
+      setMessage({ type: 'error', text: '설정 저장을 위한 비밀번호를 입력해주세요.' });
+      return;
+    }
+
+    if (!connectionStatus.isConnected) {
+      setMessage({ type: 'error', text: '먼저 Firebase에 연결한 후 설정을 저장하세요.' });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await userConfigService.saveUserFirebaseConfig(
+        currentUser.uid,
+        formData,
+        userPassword
+      );
+
+      // 사용자 프로필 정보도 저장
+      await userConfigService.saveUserProfile(currentUser.uid, {
+        email: currentUser.email,
+        displayName: currentUser.displayName,
+        photoURL: currentUser.photoURL,
+        lastLogin: Date.now()
+      });
+
+      setHasStoredConfig(true);
+      setMessage({ 
+        type: 'success', 
+        text: 'Firebase 설정이 안전하게 저장되었습니다!' 
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '설정 저장에 실패했습니다.';
+      setMessage({ type: 'error', text: errorMessage });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Firebase 연결 상태 구독
   useEffect(() => {
@@ -184,6 +310,57 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
   };
 
   /**
+   * 폼 유효성 확인 (에러 설정 없이)
+   */
+  const isFormValid = (): boolean => {
+    return Object.values(formData).every(value => value.trim() !== '');
+  };
+
+  /**
+   * 특정 설정으로 Firebase 연결
+   * @param config Firebase 설정
+   */
+  const handleConnectWithConfig = async (config: FirebaseConfig) => {
+    setIsConnecting(true);
+    setIsLoading(true);
+    setMessage(null);
+
+    try {
+      // Firebase 초기화
+      const isInitialized = await firebaseService.initializeFirebase(config);
+      
+      if (isInitialized) {
+        // 구글 로그인 사용자가 있는 경우 익명 인증을 건너뜀
+        if (currentUser) {
+          console.log('Google 로그인 사용자 감지, 자동 연결 완료');
+          setMessage({ type: 'success', text: 'Firebase 자동 연결이 완료되었습니다.' });
+          
+          // GoogleAuthService에 새로운 Firebase Auth 인스턴스 설정
+          const auth = firebaseService.getAuth();
+          if (auth) {
+            googleAuthService.setAuth(auth);
+          }
+        } else {
+          // 구글 로그인이 없는 경우에만 익명 인증 수행
+          await firebaseService.signInAnonymously();
+          setMessage({ type: 'success', text: 'Firebase 연결 및 익명 인증이 완료되었습니다.' });
+        }
+      } else {
+        throw new Error('Firebase 초기화에 실패했습니다.');
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '연결에 실패했습니다.';
+      console.error('Firebase 자동 연결 실패:', error);
+      setMessage({ type: 'error', text: errorMessage });
+      onConnectionError(errorMessage);
+    } finally {
+      setIsConnecting(false);
+      setIsLoading(false);
+    }
+  };
+
+  /**
    * Firebase 연결 테스트
    */
   const handleConnect = async () => {
@@ -201,15 +378,28 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
       const isInitialized = await firebaseService.initializeFirebase(formData);
       
       if (isInitialized) {
-        // 익명 인증 수행
-        await firebaseService.signInAnonymously();
-        setMessage({ type: 'success', text: 'Firebase 연결 및 인증이 완료되었습니다.' });
+        // 구글 로그인 사용자가 있는 경우 익명 인증을 건너뜀
+        if (currentUser) {
+          console.log('Google 로그인 사용자 감지, 익명 인증 건너뜀');
+          setMessage({ type: 'success', text: 'Firebase 연결이 완료되었습니다.' });
+          
+          // GoogleAuthService에 새로운 Firebase Auth 인스턴스 설정
+          const auth = firebaseService.getAuth();
+          if (auth) {
+            googleAuthService.setAuth(auth);
+          }
+        } else {
+          // 구글 로그인이 없는 경우에만 익명 인증 수행
+          await firebaseService.signInAnonymously();
+          setMessage({ type: 'success', text: 'Firebase 연결 및 익명 인증이 완료되었습니다.' });
+        }
       } else {
         throw new Error('Firebase 초기화에 실패했습니다.');
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '연결에 실패했습니다.';
+      console.error('Firebase 연결 실패:', error);
       setMessage({ type: 'error', text: errorMessage });
       onConnectionError(errorMessage);
     } finally {
@@ -288,6 +478,88 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </Button>
         </HStack>
 
+        {/* Google 로그인 섹션 - 가장 먼저 표시 */}
+        {!currentUser ? (
+          <Box p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">
+            <Text fontWeight="bold" mb={2} color="blue.800">1단계: Google 로그인</Text>
+            <Text fontSize="sm" color="blue.700" mb={3}>
+              Google 계정으로 로그인하여 Firebase 설정을 안전하게 저장하고 관리하세요.
+            </Text>
+            <GoogleLogin 
+              onLoginSuccess={handleLoginSuccess}
+              onLoginError={handleLoginError}
+            />
+          </Box>
+        ) : (
+          <Box p={4} bg="green.50" borderRadius="md" borderLeft="4px" borderColor="green.400">
+            <HStack justify="space-between" align="center">
+              <VStack align="start" gap={1}>
+                <Text fontWeight="bold" color="green.800">
+                  ✅ {currentUser.displayName}님 로그인 완료
+                </Text>
+                <Text fontSize="sm" color="green.700">
+                  {currentUser.email}
+                </Text>
+              </VStack>
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="red"
+                onClick={() => googleAuthService.signOut()}
+              >
+                로그아웃
+              </Button>
+            </HStack>
+            
+            {/* 저장된 설정 로드 섹션 */}
+            {hasStoredConfig && !connectionStatus.isConnected && (
+              <Box mt={4} p={3} bg="blue.50" borderRadius="md">
+                <Text fontWeight="bold" color="blue.800" mb={2}>
+                  💾 저장된 Firebase 설정 발견
+                </Text>
+                <Text fontSize="sm" color="blue.700" mb={3}>
+                  이전에 저장한 Firebase 설정을 불러와서 자동으로 연결할 수 있습니다.
+                </Text>
+                <HStack gap={2}>
+                  <Input
+                    type="password"
+                    placeholder="설정 암호화에 사용한 비밀번호"
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    size="sm"
+                    flex={1}
+                  />
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    onClick={loadStoredConfig}
+                    disabled={isLoading || !userPassword.trim()}
+                  >
+                    자동 연결
+                  </Button>
+                </HStack>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {/* Firebase 연결 상태 표시 */}
+        {currentUser && (
+          <Box p={4} bg={connectionStatus.isConnected ? "green.50" : "yellow.50"} borderRadius="md" borderLeft="4px" borderColor={connectionStatus.isConnected ? "green.400" : "yellow.400"}>
+            <Text fontWeight="bold" mb={2} color={connectionStatus.isConnected ? "green.800" : "yellow.800"}>
+              {connectionStatus.isConnected ? '✅ Firebase 연결 완료' : '2단계: Firebase 연결'}
+            </Text>
+            <Text fontSize="sm" color={connectionStatus.isConnected ? "green.700" : "yellow.700"}>
+              {connectionStatus.isConnected 
+                ? 'Firebase 프로젝트에 성공적으로 연결되었습니다.'
+                : hasStoredConfig 
+                  ? '저장된 설정으로 자동 연결하거나 새로운 Firebase 설정을 입력하세요.'
+                  : 'Firebase 프로젝트 설정을 입력하여 연결하세요.'
+              }
+            </Text>
+          </Box>
+        )}
+
         {/* 도움말 섹션 */}
         {showHelp && (
           <Box p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">
@@ -332,70 +604,109 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </Box>
         )}
 
-        {/* 입력 폼 */}
-        <VStack gap={4} align="stretch">
-          {(Object.keys(formData) as Array<keyof FirebaseConfig>).map((field) => (
-            <Box key={field}>
-              <Text fontSize="sm" fontWeight="medium" mb={1}>
-                {getFieldLabel(field)} *
-              </Text>
-              {field === 'databaseURL' ? (
-                <Textarea
-                  value={formData[field]}
-                  onChange={(e) => handleInputChange(field, e.target.value)}
-                  placeholder={getFieldPlaceholder(field)}
-                  size="sm"
-                  resize="none"
-                  rows={2}
-                  borderColor={fieldErrors[field] ? 'red.300' : undefined}
-                />
-              ) : (
-                <Input
-                  value={formData[field]}
-                  onChange={(e) => handleInputChange(field, e.target.value)}
-                  placeholder={getFieldPlaceholder(field)}
-                  size="sm"
-                  type={field === 'apiKey' ? 'password' : 'text'}
-                  borderColor={fieldErrors[field] ? 'red.300' : undefined}
-                />
-              )}
-              {fieldErrors[field] && (
-                <Text fontSize="xs" color="red.500" mt={1}>
-                  {fieldErrors[field]}
+        {/* Firebase 설정 입력 폼 - Google 로그인 후에만 표시 */}
+        {currentUser && !connectionStatus.isConnected && (
+          <VStack gap={4} align="stretch">
+            <Text fontSize="md" fontWeight="bold" color="gray.800">
+              Firebase 프로젝트 설정
+            </Text>
+            {(Object.keys(formData) as Array<keyof FirebaseConfig>).map((field) => (
+              <Box key={field}>
+                <Text fontSize="sm" fontWeight="medium" mb={1}>
+                  {getFieldLabel(field)} *
                 </Text>
-              )}
-            </Box>
-          ))}
-        </VStack>
+                {field === 'databaseURL' ? (
+                  <Textarea
+                    value={formData[field]}
+                    onChange={(e) => handleInputChange(field, e.target.value)}
+                    placeholder={getFieldPlaceholder(field)}
+                    size="sm"
+                    resize="none"
+                    rows={2}
+                    borderColor={fieldErrors[field] ? 'red.300' : undefined}
+                  />
+                ) : (
+                  <Input
+                    value={formData[field]}
+                    onChange={(e) => handleInputChange(field, e.target.value)}
+                    placeholder={getFieldPlaceholder(field)}
+                    size="sm"
+                    type={field === 'apiKey' ? 'password' : 'text'}
+                    borderColor={fieldErrors[field] ? 'red.300' : undefined}
+                  />
+                )}
+                {fieldErrors[field] && (
+                  <Text fontSize="xs" color="red.500" mt={1}>
+                    {fieldErrors[field]}
+                  </Text>
+                )}
+              </Box>
+            ))}
+          </VStack>
+        )}
 
-        {/* 액션 버튼 */}
-        <HStack gap={3} justify="flex-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadFromEnvironment}
-            disabled={isLoading}
-          >
-            환경변수에서 불러오기
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-            disabled={isLoading}
-          >
-            초기화
-          </Button>
-          <Button
-            colorScheme="blue"
-            size="sm"
-            onClick={handleConnect}
-            loading={isLoading}
-            disabled={connectionStatus.isAuthenticated}
-          >
-            {isLoading ? '연결 중...' : connectionStatus.isAuthenticated ? '연결됨' : 'Firebase 연결'}
-          </Button>
-        </HStack>
+        {/* 액션 버튼 - Google 로그인 후에만 표시 */}
+        {currentUser && !connectionStatus.isConnected && (
+          <HStack gap={3} justify="flex-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadFromEnvironment}
+              disabled={isLoading}
+            >
+              환경변수에서 불러오기
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              disabled={isLoading}
+            >
+              초기화
+            </Button>
+            <Button
+              colorScheme="blue"
+              size="sm"
+              onClick={handleConnect}
+              disabled={isLoading || !isFormValid()}
+            >
+              {isLoading ? '연결 중...' : 'Firebase 연결'}
+            </Button>
+          </HStack>
+        )}
+
+        {/* Firebase 설정 저장 섹션 */}
+        {currentUser && connectionStatus.isConnected && (
+          <Box p={4} bg="yellow.50" borderRadius="md" borderLeft="4px" borderColor="yellow.400">
+            <Text fontWeight="bold" color="yellow.800" mb={2}>
+              💾 Firebase 설정 저장
+            </Text>
+            <Text fontSize="sm" color="yellow.700" mb={3}>
+              현재 Firebase 설정을 암호화하여 저장하면, 다음번 로그인 시 자동으로 연결됩니다.
+            </Text>
+            <HStack gap={2}>
+              <Input
+                type="password"
+                placeholder="설정 암호화에 사용할 비밀번호"
+                value={userPassword}
+                onChange={(e) => setUserPassword(e.target.value)}
+                size="sm"
+                flex={1}
+              />
+              <Button
+                size="sm"
+                colorScheme="green"
+                onClick={saveFirebaseConfig}
+                disabled={isLoading || !userPassword.trim()}
+              >
+                {hasStoredConfig ? '설정 업데이트' : '설정 저장'}
+              </Button>
+            </HStack>
+            <Text fontSize="xs" color="yellow.600" mt={2}>
+              ⚠️ 비밀번호를 잊어버리면 저장된 설정을 복구할 수 없습니다.
+            </Text>
+          </Box>
+        )}
       </VStack>
     </Box>
   );

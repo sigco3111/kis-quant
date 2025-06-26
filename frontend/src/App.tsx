@@ -9,6 +9,8 @@ import { User } from 'firebase/auth';
 import FirebaseSetup from './components/FirebaseSetup';
 import { ApiKeySetup } from './components/ApiKeySetup';
 import { firebaseService } from './services/FirebaseService';
+import { googleAuthService, GoogleUser, AuthState } from './services/GoogleAuthService';
+import { userConfigService } from './services/UserConfigService';
 import './App.css';
 
 /**
@@ -16,12 +18,44 @@ import './App.css';
  */
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAutoConnecting, setIsAutoConnecting] = useState(false);
 
-  // 인증 상태 확인
+  // Google 인증 상태 확인 및 자동 연결
   useEffect(() => {
-    // Firebase가 초기화된 경우에만 인증 상태 확인
+    const handleAuthStateChange = async (authState: AuthState) => {
+      setGoogleUser(authState.user);
+      
+      if (authState.isAuthenticated && authState.user) {
+        // Google 로그인 성공 시 저장된 Firebase 설정 자동 로드 시도
+        await attemptAutoConnect(authState.user);
+      } else {
+        // 로그아웃 시 상태 초기화
+        setUser(null);
+        setIsSetupComplete(false);
+        setError(null);
+        setIsAutoConnecting(false);
+      }
+    };
+
+    // Google 인증 상태 구독
+    googleAuthService.onAuthStateChanged(handleAuthStateChange);
+
+    // 초기 상태 설정
+    const initialState = googleAuthService.getAuthState();
+    if (initialState.isAuthenticated && initialState.user) {
+      handleAuthStateChange(initialState);
+    }
+
+    return () => {
+      googleAuthService.offAuthStateChanged(handleAuthStateChange);
+    };
+  }, []);
+
+  // Firebase 인증 상태 확인
+  useEffect(() => {
     try {
       const currentUser = firebaseService.getCurrentUser();
       if (currentUser) {
@@ -29,7 +63,7 @@ function App() {
         setIsSetupComplete(true);
       }
 
-      // 인증 상태 변화 감지
+      // Firebase 인증 상태 변화 감지
       const unsubscribe = firebaseService.onAuthStateChanged((user) => {
         setUser(user);
         setIsSetupComplete(!!user);
@@ -41,6 +75,25 @@ function App() {
       console.log('Firebase가 아직 초기화되지 않았습니다.');
     }
   }, []);
+
+  /**
+   * 저장된 설정으로 자동 연결 시도
+   * @param googleUser Google 사용자 정보
+   */
+  const attemptAutoConnect = async (googleUser: GoogleUser) => {
+    try {
+      // 저장된 설정이 있는지 확인
+      const hasConfig = await userConfigService.hasUserFirebaseConfig(googleUser.uid);
+      
+      if (hasConfig) {
+        console.log('저장된 Firebase 설정을 발견했습니다. 자동 연결을 위해 사용자 입력을 기다립니다.');
+        // 사용자가 비밀번호를 입력해야 하므로 여기서는 알림만 표시
+        setError(null);
+      }
+    } catch (error) {
+      console.error('자동 연결 확인 실패:', error);
+    }
+  };
 
   /**
    * Firebase 연결 성공 처리
@@ -122,10 +175,18 @@ function App() {
                   </Button>
                 </Box>
                 
-                {user && (
+                {googleUser && (
                   <Box w="full" textAlign="left">
                     <Text fontSize="sm" color="gray.600">
-                      사용자 ID: {user.uid.substring(0, 8)}...
+                      로그인: {googleUser.displayName} ({googleUser.email})
+                    </Text>
+                  </Box>
+                )}
+                
+                {user && (
+                  <Box w="full" textAlign="left">
+                    <Text fontSize="sm" color="gray.500">
+                      Firebase UID: {user.uid.substring(0, 8)}...
                     </Text>
                   </Box>
                 )}

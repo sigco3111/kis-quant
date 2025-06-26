@@ -82,6 +82,19 @@ export class FirebaseService {
       this.database = getDatabase(this.app);
       this.firestore = getFirestore(this.app);
 
+      // Google 인증 서비스에 Auth 인스턴스 설정
+      try {
+        const { googleAuthService } = await import('./GoogleAuthService');
+        const { userConfigService } = await import('./UserConfigService');
+        
+        googleAuthService.setAuth(this.auth);
+        userConfigService.setDatabase(this.database);
+        
+        console.log('Google 인증 서비스 초기화 완료');
+      } catch (error) {
+        console.warn('Google 인증 서비스 설정 실패:', error);
+      }
+
       // 기본 초기화 완료 상태로 설정
       this.updateConnectionStatus({
         isConnected: true,
@@ -213,6 +226,14 @@ export class FirebaseService {
    */
   getConnectionStatus(): ConnectionStatus {
     return { ...this.connectionStatus };
+  }
+
+  /**
+   * Auth 인스턴스 반환
+   * @returns Auth | null
+   */
+  getAuth(): Auth | null {
+    return this.auth;
   }
 
   /**
