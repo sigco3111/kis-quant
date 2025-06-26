@@ -19,6 +19,7 @@ import {
 import { firebaseService, FirebaseConfig, ConnectionStatus } from '../services/FirebaseService';
 import { googleAuthService, GoogleUser } from '../services/GoogleAuthService';
 import { userConfigService } from '../services/UserConfigService';
+import { localConfigService, LocalFirebaseConfig } from '../services/LocalConfigService';
 import GoogleLogin from './GoogleLogin';
 
 interface FirebaseSetupProps {
@@ -63,7 +64,7 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
   /**
    * 환경변수에서 Firebase 설정값 로드
    */
-  const loadFromEnvironment = () => {
+  const loadFromEnvironment = (): boolean => {
     try {
       const envConfig: FirebaseConfig = {
         apiKey: process.env.REACT_APP_FIREBASE_API_KEY || '',
@@ -96,11 +97,13 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           type: 'info', 
           text: `환경변수에서 ${foundValues}개의 Firebase 설정을 불러왔습니다.` 
         });
+        return true;
       } else {
         setMessage({ 
           type: 'error', 
           text: '환경변수에서 Firebase 설정을 찾을 수 없습니다. .env 파일을 확인해주세요.' 
         });
+        return false;
       }
     } catch (error) {
       console.error('환경변수 로드 중 오류:', error);
@@ -108,12 +111,70 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
         type: 'error', 
         text: '환경변수 로드 중 오류가 발생했습니다.' 
       });
+      return false;
     }
   };
 
-  // 컴포넌트 마운트 시 환경변수에서 설정값 로드
+  /**
+   * localStorage에서 Firebase 설정 로드
+   */
+  const loadFromLocalStorage = () => {
+    try {
+      const savedConfig = localConfigService.loadFirebaseConfig();
+      if (savedConfig && localConfigService.validateConfig(savedConfig)) {
+        setFormData(savedConfig);
+        setMessage({ 
+          type: 'success', 
+          text: '브라우저에 저장된 Firebase 설정을 불러왔습니다.' 
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('localStorage 로드 실패:', error);
+      setMessage({ type: 'error', text: '저장된 설정 로드에 실패했습니다.' });
+      return false;
+    }
+  };
+
+  /**
+   * Firebase 설정을 localStorage에 저장
+   */
+  const saveToLocalStorage = () => {
+    try {
+      if (!isFormValid()) {
+        setMessage({ type: 'error', text: '모든 필드를 입력한 후 저장하세요.' });
+        return;
+      }
+
+      localConfigService.saveFirebaseConfig(formData as LocalFirebaseConfig);
+      setMessage({ 
+        type: 'success', 
+        text: 'Firebase 설정이 브라우저에 저장되었습니다! 다음부터 자동으로 로드됩니다.' 
+      });
+    } catch (error) {
+      console.error('localStorage 저장 실패:', error);
+      setMessage({ type: 'error', text: '설정 저장에 실패했습니다.' });
+    }
+  };
+
+  // 컴포넌트 마운트 시 설정 자동 로드 (환경변수 → localStorage 순서)
   useEffect(() => {
-    loadFromEnvironment();
+    // 1. 먼저 환경변수에서 로드 시도
+    const envLoaded = loadFromEnvironment();
+    
+    // 2. 환경변수가 없으면 localStorage에서 로드
+    if (!envLoaded) {
+      setTimeout(() => {
+        const localLoaded = loadFromLocalStorage();
+        if (!localLoaded) {
+          setMessage({ 
+            type: 'info', 
+            text: 'Firebase 프로젝트 설정을 입력해주세요. 설정은 브라우저에 저장되어 다음부터 자동으로 로드됩니다.' 
+          });
+        }
+      }, 500);
+    }
   }, []);
 
   /**
@@ -393,6 +454,14 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           await firebaseService.signInAnonymously();
           setMessage({ type: 'success', text: 'Firebase 연결 및 익명 인증이 완료되었습니다.' });
         }
+
+        // Firebase 연결 성공 시 자동으로 localStorage에 저장
+        try {
+          localConfigService.saveFirebaseConfig(formData as LocalFirebaseConfig);
+          console.log('Firebase 설정이 자동으로 브라우저에 저장되었습니다.');
+        } catch (saveError) {
+          console.warn('Firebase 설정 자동 저장 실패:', saveError);
+        }
       } else {
         throw new Error('Firebase 초기화에 실패했습니다.');
       }
@@ -478,16 +547,33 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </Button>
         </HStack>
 
-        {/* Google 로그인 섹션 - 가장 먼저 표시 */}
+        {/* Firebase 연결 상태 표시 */}
+        <Box p={4} bg={connectionStatus.isConnected ? "green.50" : "blue.50"} borderRadius="md" borderLeft="4px" borderColor={connectionStatus.isConnected ? "green.400" : "blue.400"}>
+          <Text fontWeight="bold" mb={2} color={connectionStatus.isConnected ? "green.800" : "blue.800"}>
+            {connectionStatus.isConnected ? '✅ Firebase 연결 완료' : '1단계: Firebase 연결'}
+          </Text>
+          <Text fontSize="sm" color={connectionStatus.isConnected ? "green.700" : "blue.700"}>
+            {connectionStatus.isConnected 
+              ? 'Firebase 프로젝트에 성공적으로 연결되었습니다.'
+              : 'Firebase 프로젝트 설정을 입력하여 연결하세요.'
+            }
+          </Text>
+        </Box>
+
+        {/* Google 로그인 섹션 - Firebase 연결 후 활성화 */}
         {!currentUser ? (
-          <Box p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">
-            <Text fontWeight="bold" mb={2} color="blue.800">1단계: Google 로그인</Text>
-            <Text fontSize="sm" color="blue.700" mb={3}>
+          <Box p={4} bg={connectionStatus.isConnected ? "blue.50" : "gray.50"} borderRadius="md" borderLeft="4px" borderColor={connectionStatus.isConnected ? "blue.400" : "gray.400"}>
+            <Text fontWeight="bold" mb={2} color={connectionStatus.isConnected ? "blue.800" : "gray.600"}>
+              2단계: Google 로그인
+            </Text>
+            <Text fontSize="sm" color={connectionStatus.isConnected ? "blue.700" : "gray.600"} mb={3}>
               Google 계정으로 로그인하여 Firebase 설정을 안전하게 저장하고 관리하세요.
             </Text>
             <GoogleLogin 
               onLoginSuccess={handleLoginSuccess}
               onLoginError={handleLoginError}
+              disabled={!connectionStatus.isConnected}
+              disabledMessage="Firebase 프로젝트 연결을 먼저 완료해주세요."
             />
           </Box>
         ) : (
@@ -543,22 +629,7 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </Box>
         )}
 
-        {/* Firebase 연결 상태 표시 */}
-        {currentUser && (
-          <Box p={4} bg={connectionStatus.isConnected ? "green.50" : "yellow.50"} borderRadius="md" borderLeft="4px" borderColor={connectionStatus.isConnected ? "green.400" : "yellow.400"}>
-            <Text fontWeight="bold" mb={2} color={connectionStatus.isConnected ? "green.800" : "yellow.800"}>
-              {connectionStatus.isConnected ? '✅ Firebase 연결 완료' : '2단계: Firebase 연결'}
-            </Text>
-            <Text fontSize="sm" color={connectionStatus.isConnected ? "green.700" : "yellow.700"}>
-              {connectionStatus.isConnected 
-                ? 'Firebase 프로젝트에 성공적으로 연결되었습니다.'
-                : hasStoredConfig 
-                  ? '저장된 설정으로 자동 연결하거나 새로운 Firebase 설정을 입력하세요.'
-                  : 'Firebase 프로젝트 설정을 입력하여 연결하세요.'
-              }
-            </Text>
-          </Box>
-        )}
+
 
         {/* 도움말 섹션 */}
         {showHelp && (
@@ -604,8 +675,8 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </Box>
         )}
 
-        {/* Firebase 설정 입력 폼 - Google 로그인 후에만 표시 */}
-        {currentUser && !connectionStatus.isConnected && (
+        {/* Firebase 설정 입력 폼 - Firebase 연결이 안된 경우 표시 */}
+        {!connectionStatus.isConnected && (
           <VStack gap={4} align="stretch">
             <Text fontSize="md" fontWeight="bold" color="gray.800">
               Firebase 프로젝트 설정
@@ -645,34 +716,55 @@ export const FirebaseSetup: React.FC<FirebaseSetupProps> = ({
           </VStack>
         )}
 
-        {/* 액션 버튼 - Google 로그인 후에만 표시 */}
-        {currentUser && !connectionStatus.isConnected && (
-          <HStack gap={3} justify="flex-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadFromEnvironment}
-              disabled={isLoading}
-            >
-              환경변수에서 불러오기
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              disabled={isLoading}
-            >
-              초기화
-            </Button>
-            <Button
-              colorScheme="blue"
-              size="sm"
-              onClick={handleConnect}
-              disabled={isLoading || !isFormValid()}
-            >
-              {isLoading ? '연결 중...' : 'Firebase 연결'}
-            </Button>
-          </HStack>
+        {/* 액션 버튼 - Firebase 연결이 안된 경우 표시 */}
+        {!connectionStatus.isConnected && (
+          <VStack gap={3} align="stretch">
+            <HStack gap={2} justify="flex-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadFromEnvironment}
+                disabled={isLoading}
+              >
+                환경변수에서 불러오기
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadFromLocalStorage}
+                disabled={isLoading}
+              >
+                저장된 설정 불러오기
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                disabled={isLoading}
+              >
+                초기화
+              </Button>
+            </HStack>
+            <HStack gap={2} justify="flex-end">
+              <Button
+                variant="outline"
+                colorScheme="green"
+                size="sm"
+                onClick={saveToLocalStorage}
+                disabled={isLoading || !isFormValid()}
+              >
+                브라우저에 저장
+              </Button>
+              <Button
+                colorScheme="blue"
+                size="sm"
+                onClick={handleConnect}
+                disabled={isLoading || !isFormValid()}
+              >
+                {isLoading ? '연결 중...' : 'Firebase 연결'}
+              </Button>
+            </HStack>
+          </VStack>
         )}
 
         {/* Firebase 설정 저장 섹션 */}

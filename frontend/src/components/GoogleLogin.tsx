@@ -19,6 +19,8 @@ import { googleAuthService, AuthState, GoogleUser } from '../services/GoogleAuth
 interface GoogleLoginProps {
   onLoginSuccess: (user: GoogleUser) => void;
   onLoginError: (error: string) => void;
+  disabled?: boolean;
+  disabledMessage?: string;
 }
 
 /**
@@ -26,7 +28,9 @@ interface GoogleLoginProps {
  */
 export const GoogleLogin: React.FC<GoogleLoginProps> = ({
   onLoginSuccess,
-  onLoginError
+  onLoginError,
+  disabled = false,
+  disabledMessage = "Firebase 설정을 먼저 완료해주세요."
 }) => {
   // 상태 관리
   const [authState, setAuthState] = useState<AuthState>({
@@ -178,12 +182,21 @@ export const GoogleLogin: React.FC<GoogleLoginProps> = ({
         {/* Google 로그인 버튼 */}
         <Button
           onClick={handleGoogleLogin}
-          disabled={authState.isLoading}
+          disabled={disabled || authState.isLoading}
           size="lg"
           colorScheme="blue"
         >
           🔐 {authState.isLoading ? '로그인 중...' : 'Google로 로그인'}
         </Button>
+        
+        {/* 비활성화 메시지 */}
+        {disabled && (
+          <Box p={3} bg="yellow.50" borderRadius="md" borderLeft="4px" borderColor="yellow.400">
+            <Text fontSize="sm" color="yellow.800" textAlign="center">
+              ⚠️ {disabledMessage}
+            </Text>
+          </Box>
+        )}
 
         {/* 도움말 */}
         <Box p={3} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">

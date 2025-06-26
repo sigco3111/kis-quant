@@ -71,8 +71,8 @@ export class GoogleAuthService {
       let app;
       
       if (existingApps.length === 0) {
-        // 환경변수에서 Firebase 설정 읽기
-        const config = {
+        // 환경변수에서 Firebase 설정 읽기 (선택적)
+        const envConfig = {
           apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
           authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
           databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
@@ -82,19 +82,22 @@ export class GoogleAuthService {
           appId: process.env.REACT_APP_FIREBASE_APP_ID
         };
 
-        // 필수 설정값 확인
-        if (!config.apiKey || !config.authDomain || !config.projectId) {
-          throw new Error('Firebase 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.');
+        // 환경변수가 있으면 사용, 없으면 에러 발생
+        if (envConfig.apiKey && envConfig.authDomain && envConfig.projectId) {
+          console.log('환경변수에서 Firebase 설정 로드');
+          
+          console.log('Firebase 기본 앱 초기화 중...', {
+            projectId: envConfig.projectId,
+            authDomain: envConfig.authDomain
+          });
+
+          // Firebase 앱 초기화 (기본 앱으로)
+          app = initializeApp(envConfig);
+          this.auth = getAuth(app);
+        } else {
+          console.warn('Firebase 환경변수가 설정되지 않음');
+          throw new Error('Google 로그인을 위해서는 먼저 Firebase 프로젝트 설정을 입력해주세요.');
         }
-
-        console.log('Firebase 기본 앱 초기화 중...', {
-          projectId: config.projectId,
-          authDomain: config.authDomain
-        });
-
-        // Firebase 앱 초기화 (기본 앱으로)
-        app = initializeApp(config);
-        this.auth = getAuth(app);
       } else {
         // 기존 앱 사용
         app = existingApps[0];
