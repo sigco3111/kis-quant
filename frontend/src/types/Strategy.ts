@@ -174,4 +174,64 @@ export interface CreateStrategyRequest {
 export interface UpdateStrategyRequest extends Partial<CreateStrategyRequest> {
   id: string;
   isActive?: boolean;
+}
+
+// 백테스트 설정
+export interface BacktestConfig {
+  strategyId: string;
+  startDate: number;        // 백테스트 시작일
+  endDate: number;          // 백테스트 종료일
+  initialCapital: number;   // 초기 자본금
+  commission: number;       // 수수료율 (%)
+  slippage: number;         // 슬리피지 (%)
+}
+
+// 백테스트 진행 상태
+export interface BacktestProgress {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;         // 0-100 (%)
+  currentDate?: number;     // 현재 처리 중인 날짜
+  message?: string;         // 상태 메시지
+  estimatedTimeRemaining?: number; // 예상 남은 시간 (초)
+}
+
+// 백테스트 요청
+export interface BacktestRequest {
+  strategy: Strategy;
+  config: BacktestConfig;
+  useComplexEngine?: boolean; // true: Python 엔진, false: Vercel 엔진
+}
+
+// 백테스트 응답
+export interface BacktestResponse {
+  success: boolean;
+  result?: BacktestResult;
+  progress?: BacktestProgress;
+  error?: string;
+}
+
+// 시장 데이터
+export interface MarketData {
+  symbol: string;
+  date: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  adjustedClose?: number;
+}
+
+// 기술 지표 값
+export interface IndicatorValue {
+  date: number;
+  value: number | { [key: string]: number }; // 단일 값 또는 복합 값 (MACD 등)
+}
+
+// 백테스트 캐시 키
+export interface BacktestCacheKey {
+  strategyHash: string;     // 전략 설정의 해시값
+  configHash: string;       // 백테스트 설정의 해시값
+  dataVersion: string;      // 시장 데이터 버전
 } 

@@ -16,13 +16,13 @@ import StockSelector from './StockSelector';
 import ConditionBuilder from './ConditionBuilder';
 
 interface StrategyBuilderProps {
-  strategy?: Strategy | null;
-  onSave?: (strategy: Strategy) => void;
+  editingStrategy?: Strategy | null;
+  onSave?: (strategy?: Strategy) => void;
   onCancel?: () => void;
 }
 
 const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
-  strategy,
+  editingStrategy,
   onSave,
   onCancel
 }) => {
@@ -52,17 +52,17 @@ const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
    * 기존 전략 로드 (편집 모드)
    */
   useEffect(() => {
-    if (strategy) {
+    if (editingStrategy) {
       setFormData({
-        name: strategy.name,
-        description: strategy.description,
-        symbols: strategy.symbols,
-        buyConditions: strategy.buyConditions,
-        sellConditions: strategy.sellConditions,
-        riskManagement: strategy.riskManagement
+        name: editingStrategy.name,
+        description: editingStrategy.description,
+        symbols: editingStrategy.symbols,
+        buyConditions: editingStrategy.buyConditions,
+        sellConditions: editingStrategy.sellConditions,
+        riskManagement: editingStrategy.riskManagement
       });
     }
-  }, [strategy]);
+  }, [editingStrategy]);
 
   /**
    * 템플릿 로드
@@ -135,10 +135,10 @@ const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
 
       let savedStrategy: Strategy;
       
-      if (strategy) {
+      if (editingStrategy) {
         // 기존 전략 업데이트
         savedStrategy = await strategyService.updateStrategy({
-          id: strategy.id,
+          id: editingStrategy.id,
           ...formData
         });
       } else {
@@ -157,7 +157,7 @@ const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [strategy, formData, strategyService, onSave]);
+  }, [editingStrategy, formData, strategyService, onSave]);
 
   /**
    * 전략 검증
@@ -510,7 +510,7 @@ const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
     <div style={containerStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>
-          {strategy ? '전략 편집' : '새 전략 생성'}
+          {editingStrategy ? '전략 편집' : '새 전략 생성'}
         </h2>
         
         {/* 단계 표시기 */}
@@ -565,7 +565,7 @@ const StrategyBuilder: React.FC<StrategyBuilderProps> = ({
               onClick={handleSave}
               disabled={isLoading}
             >
-              {isLoading ? '저장 중...' : (strategy ? '수정 완료' : '전략 생성')}
+              {isLoading ? '저장 중...' : (editingStrategy ? '수정 완료' : '전략 생성')}
             </button>
           )}
         </div>

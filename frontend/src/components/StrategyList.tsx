@@ -21,6 +21,7 @@ interface StrategyListProps {
   error: string | null;
   lastUpdated: number;
   onEditStrategy?: (strategy: Strategy) => void;
+  onStartBacktest?: (strategy: Strategy) => void;
 }
 
 /**
@@ -79,14 +80,37 @@ const getStatusBadge = (status: RealTimeStrategy['status']) => {
  * RealTimeStrategy를 Strategy로 변환 (편집용)
  */
 const convertToFullStrategy = (rtStrategy: RealTimeStrategy): Strategy => {
-  // 기본 전략 구조로 변환 (실제로는 StrategyService에서 조회해야 함)
+  // 실제로는 StrategyService에서 ID로 조회해야 하지만, 
+  // 현재는 기본 구조로 변환
   return {
     id: rtStrategy.id,
     name: rtStrategy.name,
     description: '실시간 데이터에서 변환된 전략',
-    symbols: [],
-    buyConditions: [],
-    sellConditions: [],
+    symbols: ['005930'], // 기본 종목 (삼성전자)
+    buyConditions: [{
+      id: 'buy_group_1',
+      conditions: [{
+        id: 'buy_condition_1',
+        leftIndicator: { type: 'SMA', period: 5 },
+        operator: 'CROSS_UP',
+        rightIndicator: { type: 'SMA', period: 20 },
+        description: '5일 SMA가 20일 SMA 상향돌파'
+      }],
+      operator: 'AND',
+      description: '골든 크로스 매수 신호'
+    }],
+    sellConditions: [{
+      id: 'sell_group_1',
+      conditions: [{
+        id: 'sell_condition_1',
+        leftIndicator: { type: 'SMA', period: 5 },
+        operator: 'CROSS_DOWN',
+        rightIndicator: { type: 'SMA', period: 20 },
+        description: '5일 SMA가 20일 SMA 하향돌파'
+      }],
+      operator: 'AND',
+      description: '데드 크로스 매도 신호'
+    }],
     riskManagement: {
       stopLoss: 5,
       takeProfit: 10,
@@ -108,7 +132,8 @@ export const StrategyList: React.FC<StrategyListProps> = ({
   isLoading,
   error,
   lastUpdated,
-  onEditStrategy
+  onEditStrategy,
+  onStartBacktest
 }) => {
   /**
    * 전략 편집 처리
@@ -117,6 +142,16 @@ export const StrategyList: React.FC<StrategyListProps> = ({
     if (onEditStrategy) {
       const fullStrategy = convertToFullStrategy(rtStrategy);
       onEditStrategy(fullStrategy);
+    }
+  };
+
+  /**
+   * 백테스트 시작 처리
+   */
+  const handleStartBacktest = (rtStrategy: RealTimeStrategy) => {
+    if (onStartBacktest) {
+      const fullStrategy = convertToFullStrategy(rtStrategy);
+      onStartBacktest(fullStrategy);
     }
   };
 
@@ -203,6 +238,16 @@ export const StrategyList: React.FC<StrategyListProps> = ({
                       <Badge colorScheme={statusBadge.colorScheme} variant="subtle">
                         {statusBadge.text}
                       </Badge>
+                      {onStartBacktest && (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          colorScheme="green"
+                          onClick={() => handleStartBacktest(strategy)}
+                        >
+                          백테스트
+                        </Button>
+                      )}
                       {onEditStrategy && (
                         <Button
                           size="xs"
