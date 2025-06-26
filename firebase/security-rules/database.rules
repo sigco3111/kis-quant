@@ -1,0 +1,135 @@
+{
+  "rules": {
+    // 사용자별 실시간 데이터 접근 제한
+    "users": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        
+        // 실시간 매매 상태
+        "trading_status": {
+          ".validate": "newData.hasChildren(['status', 'timestamp'])",
+          "status": {
+            ".validate": "newData.isString() && newData.val().matches(/^(active|paused|stopped)$/)"
+          },
+          "timestamp": {
+            ".validate": "newData.isNumber()"
+          }
+        },
+        
+        // 실시간 포지션 정보
+        "positions": {
+          "$positionId": {
+            ".validate": "newData.hasChildren(['symbol', 'quantity', 'price', 'timestamp'])",
+            "symbol": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "quantity": {
+              ".validate": "newData.isNumber()"
+            },
+            "price": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            }
+          }
+        },
+        
+        // 실시간 알림
+        "notifications": {
+          "$notificationId": {
+            ".validate": "newData.hasChildren(['type', 'message', 'timestamp'])",
+            "type": {
+              ".validate": "newData.isString() && newData.val().matches(/^(info|warning|error|success)$/)"
+            },
+            "message": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            },
+            "read": {
+              ".validate": "newData.isBoolean()"
+            }
+          }
+        },
+        
+        // 실시간 백테스트 진행률
+        "backtest_progress": {
+          "$backtestId": {
+            ".validate": "newData.hasChildren(['progress', 'status', 'timestamp'])",
+            "progress": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+            },
+            "status": {
+              ".validate": "newData.isString() && newData.val().matches(/^(running|completed|failed)$/)"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            }
+          }
+        },
+        
+        // 실시간 시스템 상태
+        "system_status": {
+          ".validate": "newData.hasChildren(['connection', 'last_update'])",
+          "connection": {
+            ".validate": "newData.isString() && newData.val().matches(/^(connected|disconnected|error)$/)"
+          },
+          "last_update": {
+            ".validate": "newData.isNumber()"
+          },
+          "kis_api_status": {
+            ".validate": "newData.isString() && newData.val().matches(/^(online|offline|error)$/)"
+          }
+        }
+      }
+    },
+    
+    // 공용 시장 데이터 (읽기 전용)
+    "market_data": {
+      ".read": "auth != null",
+      ".write": false,
+      
+      "indices": {
+        "$index": {
+          ".validate": "newData.hasChildren(['value', 'change', 'timestamp'])"
+        }
+      },
+      
+      "market_status": {
+        ".validate": "newData.hasChildren(['status', 'timestamp'])",
+        "status": {
+          ".validate": "newData.isString() && newData.val().matches(/^(open|closed|pre_market|after_hours)$/)"
+        }
+      }
+    },
+    
+    // 시스템 공지사항 (읽기 전용)
+    "announcements": {
+      ".read": "auth != null",
+      ".write": false,
+      
+      "$announcementId": {
+        ".validate": "newData.hasChildren(['title', 'message', 'timestamp', 'type'])",
+        "title": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "message": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
+        },
+        "type": {
+          ".validate": "newData.isString() && newData.val().matches(/^(info|warning|maintenance|update)$/)"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    
+    // 기본 거부 규칙
+    ".read": false,
+    ".write": false
+  }
+} 

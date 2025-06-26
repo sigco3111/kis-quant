@@ -1,0 +1,84 @@
+// Firebase Firestore 보안 규칙
+// 사용자별 데이터 접근 제한 및 보안 강화
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자별 데이터 접근 제한
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 전략 컬렉션 규칙
+    match /users/{userId}/strategies/{strategyId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId
+        && validateStrategyData();
+    }
+    
+    // 백테스트 결과 규칙
+    match /users/{userId}/backtest_results/{backtestId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 매매 기록 규칙
+    match /users/{userId}/trades/{tradeId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 설정 정보 규칙
+    match /users/{userId}/settings/{settingId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId
+        && validateSettingsData();
+    }
+    
+    // 암호화된 API 키 규칙 (특별 보안)
+    match /users/{userId}/api_keys/{keyId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId
+        && validateApiKeyData();
+    }
+    
+    // 로그 규칙 (읽기 전용)
+    match /users/{userId}/logs/{logId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && validateLogData();
+    }
+    
+    // 공용 데이터 (읽기 전용)
+    match /public/{document=**} {
+      allow read: if true;
+      allow write: if false; // 관리자만 수정 가능
+    }
+    
+    // 기본 거부 규칙
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+  
+  // 데이터 검증 함수들
+  function validateStrategyData() {
+    return request.resource.data.keys().hasAll(['name', 'type', 'parameters'])
+      && request.resource.data.name is string
+      && request.resource.data.name.size() > 0
+      && request.resource.data.name.size() <= 100;
+  }
+  
+  function validateSettingsData() {
+    return request.resource.data.keys().hasAll(['key', 'value'])
+      && request.resource.data.key is string
+      && request.resource.data.key.size() > 0;
+  }
+  
+  function validateApiKeyData() {
+    return request.resource.data.keys().hasAll(['encrypted_key', 'created_at'])
+      && request.resource.data.encrypted_key is string
+      && request.resource.data.encrypted_key.size() > 0;
+  }
+  
+  function validateLogData() {
+    return request.resource.data.keys().hasAll(['level', 'message', 'timestamp'])
+      && request.resource.data.level in ['ERROR', 'WARN', 'INFO', 'DEBUG']
+      && request.resource.data.message is string
+      && request.resource.data.timestamp is timestamp;
+  }
+} 
