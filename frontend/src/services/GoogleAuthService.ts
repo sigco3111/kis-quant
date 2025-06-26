@@ -58,64 +58,25 @@ export class GoogleAuthService {
    */
   setAuth(auth: Auth): void {
     this.auth = auth;
+    
+    // Google Auth Provider 설정
+    this.provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    
     this.setupAuthStateListener();
+    console.log('Google Auth Service: Firebase Auth 인스턴스 설정 완료');
   }
 
   /**
-   * 기본 Firebase 앱으로 초기화 (Google 로그인용)
+   * Firebase Auth 인스턴스 유효성 확인
    */
-  private async initializeDefaultFirebase(): Promise<void> {
-    try {
-      // 기존 앱이 있는지 확인
-      const existingApps = getApps();
-      let app;
-      
-      if (existingApps.length === 0) {
-        // 환경변수에서 Firebase 설정 읽기 (선택적)
-        const envConfig = {
-          apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-          authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-          databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
-          projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-          storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-          messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-          appId: process.env.REACT_APP_FIREBASE_APP_ID
-        };
-
-        // 환경변수가 있으면 사용, 없으면 에러 발생
-        if (envConfig.apiKey && envConfig.authDomain && envConfig.projectId) {
-          console.log('환경변수에서 Firebase 설정 로드');
-          
-          console.log('Firebase 기본 앱 초기화 중...', {
-            projectId: envConfig.projectId,
-            authDomain: envConfig.authDomain
-          });
-
-          // Firebase 앱 초기화 (기본 앱으로)
-          app = initializeApp(envConfig);
-          this.auth = getAuth(app);
-        } else {
-          console.warn('Firebase 환경변수가 설정되지 않음');
-          throw new Error('Google 로그인을 위해서는 먼저 Firebase 프로젝트 설정을 입력해주세요.');
-        }
-      } else {
-        // 기존 앱 사용
-        app = existingApps[0];
-        this.auth = getAuth(app);
-        console.log('기존 Firebase 앱 사용:', app.name);
-      }
-
-      // Google Auth Provider 설정
-      this.provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-
-      this.setupAuthStateListener();
-      console.log('Firebase Auth 초기화 완료');
-    } catch (error) {
-      console.error('기본 Firebase 초기화 실패:', error);
-      throw new Error(`Firebase 초기화 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+  private validateAuth(): boolean {
+    if (!this.auth) {
+      console.warn('Firebase Auth 인스턴스가 설정되지 않았습니다.');
+      return false;
     }
+    return true;
   }
 
   /**
@@ -123,18 +84,9 @@ export class GoogleAuthService {
    * @returns Promise<GoogleUser | null>
    */
   async signInWithGoogle(): Promise<GoogleUser | null> {
-    // Firebase Auth가 없으면 기본 Firebase 앱으로 초기화 시도
-    if (!this.auth) {
-      try {
-        await this.initializeDefaultFirebase();
-      } catch (error) {
-        throw new Error('Google 로그인을 위한 Firebase 초기화에 실패했습니다.');
-      }
-    }
-
-    // Auth 인스턴스 확인
-    if (!this.auth) {
-      throw new Error('Firebase Auth 초기화에 실패했습니다.');
+    // Firebase Auth 인스턴스 확인
+    if (!this.validateAuth()) {
+      throw new Error('Firebase 연결을 먼저 완료해주세요. Firebase 설정 단계에서 연결 테스트를 성공한 후 Google 로그인을 시도해주세요.');
     }
 
     this.updateAuthState({
@@ -144,6 +96,11 @@ export class GoogleAuthService {
     });
 
     try {
+      // 타입 안전성을 위해 다시 한번 확인
+      if (!this.auth) {
+        throw new Error('Firebase Auth 인스턴스가 없습니다.');
+      }
+
       const result = await signInWithPopup(this.auth, this.provider);
       const user = result.user;
 
