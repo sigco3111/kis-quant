@@ -367,6 +367,8 @@ export class FirebaseService {
       'auth/app-not-authorized': '앱이 인증되지 않았습니다. 프로젝트 설정을 확인하세요.',
       'auth/network-request-failed': '네트워크 연결을 확인하세요.',
       'auth/too-many-requests': '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+      'auth/admin-restricted-operation': 'Firebase Console에서 인증 방법을 활성화해주세요. (Authentication → Sign-in method → 익명 또는 Google)',
+      'auth/operation-not-allowed': '이 인증 방법이 허용되지 않습니다. Firebase Console에서 설정을 확인하세요.',
       'permission-denied': '권한이 거부되었습니다. 보안 규칙을 확인하세요.',
       'unavailable': 'Firebase 서비스를 사용할 수 없습니다.',
       'invalid-argument': '잘못된 인수입니다. 설정을 확인하세요.'

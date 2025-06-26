@@ -33,6 +33,15 @@ export class EncryptionUtils {
    */
   public static encryptApiKey(plainText: string, userUid: string): string {
     try {
+      // 입력 데이터 검증
+      if (!plainText || typeof plainText !== 'string') {
+        throw new Error('암호화할 데이터가 올바르지 않습니다.');
+      }
+
+      if (!userUid || typeof userUid !== 'string') {
+        throw new Error('사용자 UID가 올바르지 않습니다.');
+      }
+
       // 암호화 키 생성
       const key = this.generateEncryptionKey(userUid);
       
@@ -46,12 +55,28 @@ export class EncryptionUtils {
         padding: CryptoJS.pad.Pkcs7
       });
       
+      // 암호화 결과 검증
+      if (!encrypted.ciphertext || encrypted.ciphertext.words.length === 0) {
+        throw new Error('암호화 과정에서 오류가 발생했습니다.');
+      }
+      
       // IV와 암호화된 데이터를 합쳐서 base64로 인코딩
       const combined = iv.concat(encrypted.ciphertext);
-      return combined.toString(CryptoJS.enc.Base64);
+      const result = combined.toString(CryptoJS.enc.Base64);
+      
+      // 결과 검증
+      if (!result) {
+        throw new Error('암호화된 데이터 인코딩에 실패했습니다.');
+      }
+      
+      return result;
     } catch (error) {
-      console.error('API 키 암호화 중 오류가 발생했습니다.');
-      throw new Error('암호화 처리에 실패했습니다. 다시 시도해주세요.');
+      console.error('API 키 암호화 중 오류가 발생했습니다:', error);
+      if (error instanceof Error) {
+        throw new Error(`암호화 실패: ${error.message}`);
+      } else {
+        throw new Error('암호화 처리에 실패했습니다. 다시 시도해주세요.');
+      }
     }
   }
 
@@ -63,11 +88,25 @@ export class EncryptionUtils {
    */
   public static decryptApiKey(encryptedData: string, userUid: string): string {
     try {
+      // 입력 데이터 검증
+      if (!encryptedData || typeof encryptedData !== 'string') {
+        throw new Error('암호화된 데이터가 올바르지 않습니다.');
+      }
+
+      if (!userUid || typeof userUid !== 'string') {
+        throw new Error('사용자 UID가 올바르지 않습니다.');
+      }
+
       // 암호화 키 생성
       const key = this.generateEncryptionKey(userUid);
       
       // base64 디코딩하여 바이너리 데이터 복원
       const combined = CryptoJS.enc.Base64.parse(encryptedData);
+      
+      // 데이터 길이 검증
+      if (combined.words.length < (this.IV_SIZE / 4) + 1) {
+        throw new Error('암호화된 데이터의 길이가 올바르지 않습니다.');
+      }
       
       // IV와 암호화된 데이터 분리
       const iv = CryptoJS.lib.WordArray.create(
@@ -88,10 +127,21 @@ export class EncryptionUtils {
         }
       );
       
-      return decrypted.toString(CryptoJS.enc.Utf8);
+      const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+      
+      // 복호화 결과 검증
+      if (!decryptedText) {
+        throw new Error('복호화된 데이터가 비어있습니다. 데이터가 손상되었을 수 있습니다.');
+      }
+      
+      return decryptedText;
     } catch (error) {
-      console.error('API 키 복호화 중 오류가 발생했습니다.');
-      throw new Error('복호화 처리에 실패했습니다. API 키를 다시 확인해주세요.');
+      console.error('API 키 복호화 중 오류가 발생했습니다:', error);
+      if (error instanceof Error) {
+        throw new Error(`복호화 실패: ${error.message}`);
+      } else {
+        throw new Error('복호화 처리에 실패했습니다. API 키를 다시 확인해주세요.');
+      }
     }
   }
 

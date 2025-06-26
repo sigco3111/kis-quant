@@ -1,250 +1,258 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  deleteDoc, 
-  collection 
-} from 'firebase/firestore';
-import { FirebaseService } from './FirebaseService';
-import { EncryptionUtils } from '../utils/EncryptionUtils';
-
 /**
- * API 키 저장/조회를 위한 인터페이스
+ * API 키 관리 서비스 (localStorage 기반)
+ * 한국투자증권 API 키를 암호화하여 브라우저에 안전하게 저장
  */
+
+import CryptoJS from 'crypto-js';
+
 export interface ApiKeyData {
   appKey: string;
   appSecret: string;
-  createdAt: Date;
-  updatedAt: Date;
+  accountNumber: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
-/**
- * 암호화된 API 키 데이터 구조
- */
-interface EncryptedApiKeyData {
-  encryptedAppKey: string;
-  encryptedAppSecret: string;
-  createdAt: Date;
-  updatedAt: Date;
+interface StoredApiKeyData {
+  encryptedData: string;
+  salt: string;
+  iv: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
-/**
- * API 키 유효성 검증 결과
- */
-export interface ApiKeyValidationResult {
-  isValid: boolean;
-  message: string;
-  accountInfo?: any;
-}
-
-/**
- * 한국투자증권 API 키를 암호화하여 Firebase Firestore에 저장/조회하는 서비스 클래스
- */
 export class ApiKeyService {
-  private static readonly COLLECTION_NAME = 'api_keys';
-  private static firebaseService: FirebaseService = new FirebaseService();
-  
+  private static readonly STORAGE_KEY = 'kis_quant_api_keys';
+  private static readonly SALT_SIZE = 32;
+  private static readonly IV_SIZE = 16;
+
   /**
-   * 현재 사용자의 API 키 문서 참조를 가져옵니다.
-   * @returns Firestore 문서 참조
+   * 비밀번호로부터 암호화 키 생성
    */
-  private static async getUserApiKeyDoc() {
-    const user = this.firebaseService.getCurrentUser();
-    if (!user) {
-      throw new Error('사용자 인증이 필요합니다. Firebase에 먼저 연결해주세요.');
-    }
-
-    const db = this.firebaseService.getFirestore();
-    if (!db) {
-      throw new Error('Firebase Firestore 연결이 필요합니다.');
-    }
-
-    return doc(db, this.COLLECTION_NAME, user.uid);
+  private generateKey(password: string, salt: CryptoJS.lib.WordArray): CryptoJS.lib.WordArray {
+    return CryptoJS.PBKDF2(password, salt, {
+      keySize: 256 / 32,
+      iterations: 10000
+    });
   }
 
   /**
-   * API 키를 암호화하여 Firestore에 저장합니다.
-   * @param apiKeyData 저장할 API 키 데이터
-   * @returns 저장 성공 여부
+   * API 키 저장 (암호화)
+   * @param apiKeyData API 키 데이터
+   * @param password 암호화 비밀번호
    */
-  public static async saveApiKeys(apiKeyData: ApiKeyData): Promise<boolean> {
+  async saveApiKeys(apiKeyData: ApiKeyData, password: string): Promise<void> {
     try {
-      const user = this.firebaseService.getCurrentUser();
-      if (!user) {
-        throw new Error('사용자 인증이 필요합니다.');
+      if (!password || password.trim().length < 4) {
+        throw new Error('비밀번호는 최소 4자 이상이어야 합니다.');
       }
 
-      // API 키 형식 검증
-      if (!EncryptionUtils.validateApiKeyFormat(apiKeyData.appKey) ||
-          !EncryptionUtils.validateApiKeyFormat(apiKeyData.appSecret)) {
-        throw new Error('API 키 형식이 올바르지 않습니다. 다시 확인해주세요.');
-      }
+      // API 키 데이터 검증
+      this.validateApiKeyData(apiKeyData);
 
-      // API 키 암호화
-      const encryptedAppKey = EncryptionUtils.encryptApiKey(
-        apiKeyData.appKey, 
-        user.uid
-      );
-      const encryptedAppSecret = EncryptionUtils.encryptApiKey(
-        apiKeyData.appSecret, 
-        user.uid
-      );
-
-      // 암호화된 데이터 구조 생성
-      const encryptedData: EncryptedApiKeyData = {
-        encryptedAppKey,
-        encryptedAppSecret,
-        createdAt: apiKeyData.createdAt || new Date(),
-        updatedAt: new Date()
+      const dataToEncrypt = {
+        ...apiKeyData,
+        updatedAt: Date.now()
       };
 
-      // Firestore에 저장
-      const docRef = await this.getUserApiKeyDoc();
-      await setDoc(docRef, encryptedData);
+      // 솔트와 IV 생성
+      const salt = CryptoJS.lib.WordArray.random(ApiKeyService.SALT_SIZE);
+      const iv = CryptoJS.lib.WordArray.random(ApiKeyService.IV_SIZE);
+      
+      // 키 생성
+      const key = this.generateKey(password, salt);
+      
+      // 데이터 암호화
+      const encrypted = CryptoJS.AES.encrypt(JSON.stringify(dataToEncrypt), key, {
+        iv: iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
 
-      // 평문 API 키 메모리에서 제거
-      EncryptionUtils.clearSensitiveData(apiKeyData.appKey);
-      EncryptionUtils.clearSensitiveData(apiKeyData.appSecret);
+      const storageData: StoredApiKeyData = {
+        encryptedData: encrypted.toString(),
+        salt: salt.toString(CryptoJS.enc.Base64),
+        iv: iv.toString(CryptoJS.enc.Base64),
+        createdAt: apiKeyData.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
 
-      console.log('API 키가 성공적으로 저장되었습니다.');
-      return true;
+      // localStorage에 저장
+      localStorage.setItem(ApiKeyService.STORAGE_KEY, JSON.stringify(storageData));
+
+      console.log('API 키가 안전하게 저장되었습니다.');
     } catch (error) {
-      console.error('API 키 저장 중 오류 발생:', error);
-      throw new Error('API 키 저장에 실패했습니다. 다시 시도해주세요.');
+      console.error('API 키 저장 실패:', error);
+      throw new Error(`API 키 저장에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     }
   }
 
   /**
-   * Firestore에서 암호화된 API 키를 조회하고 복호화합니다.
-   * @returns 복호화된 API 키 데이터 또는 null
+   * API 키 로드 (복호화)
+   * @param password 복호화 비밀번호
+   * @returns API 키 데이터 또는 null
    */
-  public static async getApiKeys(): Promise<ApiKeyData | null> {
+  async loadApiKeys(password: string): Promise<ApiKeyData | null> {
     try {
-      const user = this.firebaseService.getCurrentUser();
-      if (!user) {
-        throw new Error('사용자 인증이 필요합니다.');
+      if (!password || password.trim().length === 0) {
+        throw new Error('비밀번호를 입력해주세요.');
       }
 
-      const docRef = await this.getUserApiKeyDoc();
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
+      // localStorage에서 데이터 조회
+      const storedDataStr = localStorage.getItem(ApiKeyService.STORAGE_KEY);
+      if (!storedDataStr) {
         return null;
       }
 
-      const encryptedData = docSnap.data() as EncryptedApiKeyData;
+      const storedData: StoredApiKeyData = JSON.parse(storedDataStr);
 
-      // API 키 복호화
-      const decryptedAppKey = EncryptionUtils.decryptApiKey(
-        encryptedData.encryptedAppKey, 
-        user.uid
-      );
-      const decryptedAppSecret = EncryptionUtils.decryptApiKey(
-        encryptedData.encryptedAppSecret, 
-        user.uid
-      );
+      // 솔트와 IV 복원
+      const salt = CryptoJS.enc.Base64.parse(storedData.salt);
+      const iv = CryptoJS.enc.Base64.parse(storedData.iv);
+      
+      // 키 생성
+      const key = this.generateKey(password, salt);
+      
+      // 데이터 복호화
+      const decrypted = CryptoJS.AES.decrypt(storedData.encryptedData, key, {
+        iv: iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
 
-      return {
-        appKey: decryptedAppKey,
-        appSecret: decryptedAppSecret,
-        createdAt: encryptedData.createdAt,
-        updatedAt: encryptedData.updatedAt
-      };
+      const decryptedDataStr = decrypted.toString(CryptoJS.enc.Utf8);
+      
+      if (!decryptedDataStr) {
+        throw new Error('복호화에 실패했습니다. 비밀번호를 확인해주세요.');
+      }
+
+      const apiKeyData: ApiKeyData = JSON.parse(decryptedDataStr);
+
+      // 데이터 검증
+      this.validateApiKeyData(apiKeyData);
+
+      console.log('API 키를 성공적으로 로드했습니다.');
+      return apiKeyData;
+
     } catch (error) {
-      console.error('API 키 조회 중 오류 발생:', error);
-      throw new Error('API 키 조회에 실패했습니다. 키가 손상되었을 수 있습니다.');
+      console.error('API 키 로드 실패:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('복호화') || error.message.includes('decrypt')) {
+          throw new Error('비밀번호가 올바르지 않거나 저장된 데이터가 손상되었습니다.');
+        }
+        throw error;
+      }
+      
+      throw new Error('API 키 로드에 실패했습니다.');
     }
   }
 
   /**
-   * 저장된 API 키가 있는지 확인합니다.
-   * @returns API 키 존재 여부
+   * 저장된 API 키 존재 여부 확인
+   * @returns 저장된 API 키가 있으면 true
    */
-  public static async hasApiKeys(): Promise<boolean> {
+  hasStoredApiKeys(): boolean {
     try {
-      const docRef = await this.getUserApiKeyDoc();
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists();
+      const storedData = localStorage.getItem(ApiKeyService.STORAGE_KEY);
+      return storedData !== null;
     } catch (error) {
-      console.error('API 키 존재 확인 중 오류 발생:', error);
+      console.error('저장된 API 키 확인 실패:', error);
       return false;
     }
   }
 
   /**
-   * KIS API를 통해 API 키 유효성을 검증합니다.
-   * 실제 구현에서는 백엔드 프록시를 통해 검증합니다.
-   * @param apiKeyData 검증할 API 키 데이터
-   * @returns 검증 결과
+   * 저장된 API 키 삭제
    */
-  public static async validateApiKeys(apiKeyData: ApiKeyData): Promise<ApiKeyValidationResult> {
+  deleteApiKeys(): void {
     try {
-      // TODO: 백엔드 프록시 구현 후 실제 KIS API 호출로 대체
-      // 현재는 기본적인 형식 검증만 수행
-      const isAppKeyValid = EncryptionUtils.validateApiKeyFormat(apiKeyData.appKey);
-      const isAppSecretValid = EncryptionUtils.validateApiKeyFormat(apiKeyData.appSecret);
+      localStorage.removeItem(ApiKeyService.STORAGE_KEY);
+      console.log('저장된 API 키가 삭제되었습니다.');
+    } catch (error) {
+      console.error('API 키 삭제 실패:', error);
+      throw new Error('API 키 삭제에 실패했습니다.');
+    }
+  }
 
-      if (!isAppKeyValid || !isAppSecretValid) {
-        return {
-          isValid: false,
-          message: 'API 키 형식이 올바르지 않습니다.'
-        };
+  /**
+   * API 키 검증 (한국투자증권 API 형식)
+   * @param appKey 앱 키
+   * @param appSecret 앱 시크릿
+   * @returns 검증 성공 시 true
+   */
+  async validateApiKey(appKey: string, appSecret: string): Promise<boolean> {
+    try {
+      // 기본 형식 검증
+      if (!appKey || !appSecret) {
+        return false;
       }
 
-      // 임시 성공 응답 (실제 KIS API 연결 테스트는 백엔드 구현 후 추가)
-      return {
-        isValid: true,
-        message: 'API 키 형식이 유효합니다. 백엔드 연동 후 실제 연결을 테스트합니다.',
-        accountInfo: {
-          accountStatus: 'pending_verification'
-        }
-      };
-    } catch (error) {
-      console.error('API 키 검증 중 오류 발생:', error);
-      return {
-        isValid: false,
-        message: 'API 키 검증 중 오류가 발생했습니다. 다시 시도해주세요.'
-      };
-    }
-  }
+      // 한국투자증권 API 키 형식 검증 (대략적)
+      if (appKey.length < 30 || appSecret.length < 30) {
+        return false;
+      }
 
-  /**
-   * 저장된 API 키를 삭제합니다.
-   * @returns 삭제 성공 여부
-   */
-  public static async deleteApiKeys(): Promise<boolean> {
-    try {
-      const docRef = await this.getUserApiKeyDoc();
-      await deleteDoc(docRef);
-      console.log('API 키가 성공적으로 삭제되었습니다.');
+      // TODO: 실제 API 호출로 검증하는 로직 추가 가능
+      // 현재는 형식만 검증
       return true;
+
     } catch (error) {
-      console.error('API 키 삭제 중 오류 발생:', error);
-      throw new Error('API 키 삭제에 실패했습니다. 다시 시도해주세요.');
+      console.error('API 키 검증 실패:', error);
+      return false;
     }
   }
 
   /**
-   * API 키를 업데이트합니다.
-   * @param newApiKeyData 새로운 API 키 데이터
-   * @returns 업데이트 성공 여부
+   * 저장된 API 키 정보 조회 (메타데이터만)
+   * @returns 저장 정보 또는 null
    */
-  public static async updateApiKeys(newApiKeyData: Omit<ApiKeyData, 'createdAt' | 'updatedAt'>): Promise<boolean> {
+  getStoredApiKeyInfo(): { createdAt: number; updatedAt: number } | null {
     try {
-      // 기존 API 키 조회하여 생성일 보존
-      const existingData = await this.getApiKeys();
-      const createdAt = existingData?.createdAt || new Date();
+      const storedDataStr = localStorage.getItem(ApiKeyService.STORAGE_KEY);
+      if (!storedDataStr) {
+        return null;
+      }
 
-      const apiKeyData: ApiKeyData = {
-        ...newApiKeyData,
-        createdAt,
-        updatedAt: new Date()
+      const storedData: StoredApiKeyData = JSON.parse(storedDataStr);
+      return {
+        createdAt: storedData.createdAt,
+        updatedAt: storedData.updatedAt
       };
-
-      return await this.saveApiKeys(apiKeyData);
     } catch (error) {
-      console.error('API 키 업데이트 중 오류 발생:', error);
-      throw new Error('API 키 업데이트에 실패했습니다. 다시 시도해주세요.');
+      console.error('저장된 API 키 정보 조회 실패:', error);
+      return null;
     }
   }
-} 
+
+  /**
+   * API 키 데이터 유효성 검증
+   * @param apiKeyData 검증할 API 키 데이터
+   */
+  private validateApiKeyData(apiKeyData: ApiKeyData): void {
+    if (!apiKeyData) {
+      throw new Error('API 키 데이터가 없습니다.');
+    }
+
+    if (!apiKeyData.appKey || apiKeyData.appKey.trim().length === 0) {
+      throw new Error('앱 키(App Key)가 필요합니다.');
+    }
+
+    if (!apiKeyData.appSecret || apiKeyData.appSecret.trim().length === 0) {
+      throw new Error('앱 시크릿(App Secret)이 필요합니다.');
+    }
+
+    if (!apiKeyData.accountNumber || apiKeyData.accountNumber.trim().length === 0) {
+      throw new Error('계좌번호가 필요합니다.');
+    }
+
+    // 계좌번호 형식 검증 (8자리 숫자)
+    const accountPattern = /^\d{8}$/;
+    if (!accountPattern.test(apiKeyData.accountNumber.replace(/-/g, ''))) {
+      throw new Error('계좌번호는 8자리 숫자여야 합니다. (예: 12345678)');
+    }
+  }
+}
+
+// 싱글톤 인스턴스
+export const apiKeyService = new ApiKeyService(); 
