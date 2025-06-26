@@ -1,0 +1,26 @@
+{
+  "name": "kis-quant-backend",
+  "version": "1.0.0",
+  "description": "KIS Quant Backend API Proxy",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "axios": "^1.6.0",
+    "crypto-js": "^4.2.0",
+    "cors": "^2.8.5",
+    "rate-limiter-flexible": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/cors": "^2.8.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 
