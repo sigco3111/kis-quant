@@ -19,6 +19,8 @@ import { TradeHistory } from './TradeHistory';
 import StrategyBuilder from './StrategyBuilder';
 import BacktestRunner from './BacktestRunner';
 import BacktestResults from './BacktestResults';
+import RealTimeMonitor from './RealTimeMonitor';
+import TradingControl from './TradingControl';
 import { Strategy, BacktestResult } from '../types/Strategy';
 
 /**
@@ -44,6 +46,10 @@ export const Dashboard: React.FC = () => {
   const [backtestStrategy, setBacktestStrategy] = useState<Strategy | null>(null);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [showBacktestResults, setShowBacktestResults] = useState(false);
+
+  // 실시간 모니터링 상태 관리
+  const [showRealTimeMonitor, setShowRealTimeMonitor] = useState(false);
+  const [showTradingControl, setShowTradingControl] = useState(false);
 
   /**
    * 전략 편집 시작
@@ -104,6 +110,73 @@ export const Dashboard: React.FC = () => {
     setBacktestStrategy(null);
   };
 
+  /**
+   * 실시간 모니터링 열기
+   */
+  const handleShowRealTimeMonitor = () => {
+    setShowRealTimeMonitor(true);
+  };
+
+  /**
+   * 실시간 모니터링 닫기
+   */
+  const handleCloseRealTimeMonitor = () => {
+    setShowRealTimeMonitor(false);
+  };
+
+  /**
+   * 매매 제어 열기
+   */
+  const handleShowTradingControl = () => {
+    setShowTradingControl(true);
+  };
+
+  /**
+   * 매매 제어 닫기
+   */
+  const handleCloseTradingControl = () => {
+    setShowTradingControl(false);
+  };
+
+  // 실시간 모니터링 화면
+  if (showRealTimeMonitor) {
+    return (
+      <RealTimeMonitor
+        onClose={handleCloseRealTimeMonitor}
+      />
+    );
+  }
+
+  // 매매 제어 화면
+  if (showTradingControl) {
+    // 기본 전략 생성 (실제로는 선택된 전략을 사용해야 함)
+    const defaultStrategy: Strategy = {
+      id: 'default-strategy',
+      name: '기본 자동매매 전략',
+      description: '기본 자동매매 전략입니다.',
+      symbols: ['005930'], // 삼성전자
+      buyConditions: [],
+      sellConditions: [],
+      riskManagement: {
+        stopLoss: 5,
+        takeProfit: 10,
+        maxPosition: 10,
+        maxDailyTrades: 5
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isActive: false,
+      version: 1
+    };
+
+    return (
+      <TradingControl
+        strategy={defaultStrategy}
+        onClose={handleCloseTradingControl}
+      />
+    );
+  }
+
   // 백테스트 결과 표시
   if (showBacktestResults && backtestResult) {
     return (
@@ -158,6 +231,22 @@ export const Dashboard: React.FC = () => {
               size="md"
             >
               📈 새 전략 생성
+            </Button>
+
+            <Button
+              colorScheme="blue"
+              onClick={handleShowRealTimeMonitor}
+              size="md"
+            >
+              🔴 실시간 모니터링
+            </Button>
+
+            <Button
+              colorScheme="purple"
+              onClick={handleShowTradingControl}
+              size="md"
+            >
+              🎯 매매 제어
             </Button>
             
             <Button
