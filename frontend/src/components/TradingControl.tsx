@@ -51,7 +51,6 @@ export const TradingControl: React.FC<TradingControlProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [isMockMode, setIsMockMode] = useState(false); // 목 모드 상태
-  const [isEmergencyOpen, setIsEmergencyOpen] = useState(false);
 
   /**
    * 목 데이터로 봇 상태 생성
@@ -451,6 +450,13 @@ export const TradingControl: React.FC<TradingControlProps> = ({
           <Text fontSize="sm" color="gray.500">
             마지막 업데이트: {new Date(botStatus.last_update).toLocaleString()}
           </Text>
+          {isMockMode && (
+            <Box mt={2} p={2} bg="blue.100" borderRadius="md" border="1px solid #3182CE">
+              <Text fontSize="sm" color="blue.700" fontWeight="bold">
+                🎯 목 모드: 백엔드 서버가 연결되지 않아 시뮬레이션으로 동작 중입니다.
+              </Text>
+            </Box>
+          )}
         </Box>
 
         {/* 통계 */}

@@ -11,7 +11,6 @@ import {
   Text,
   Button,
   ButtonGroup,
-  SimpleGrid,
   Spinner,
   Badge
 } from '@chakra-ui/react';
